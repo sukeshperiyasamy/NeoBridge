@@ -1,0 +1,158 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 440px) minmax(0, 520px);
+  justify-content: center;
+  align-items: start;
+  gap: 24px;
+  padding: 48px 16px;
+}
+
+.panel,
+.demo {
+  background: var(--surface);
+  border-radius: 28px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin-top: 18px;
+  font-size: 30px;
+}
+
+.sub {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.form {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.label small {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.input {
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  font: inherit;
+  font-size: 17px;
+  background: var(--background);
+}
+
+.input:focus {
+  outline: 3px solid var(--action-soft);
+  border-color: var(--action);
+}
+
+.error {
+  color: var(--red-text);
+  font-weight: 600;
+}
+
+.submit {
+  min-height: 56px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--action);
+  color: #fff;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.submit:hover {
+  background: var(--action-strong);
+}
+
+.demoTitle {
+  font-size: 22px;
+}
+
+.accounts {
+  list-style: none;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "who use"
+    "creds creds";
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--action-soft);
+}
+
+.accountWho {
+  grid-area: who;
+  display: flex;
+  flex-direction: column;
+}
+
+.accountWho span {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.creds {
+  grid-area: creds;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 14px;
+}
+
+.creds dt {
+  color: var(--text-muted);
+}
+
+.creds code {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--action-strong);
+}
+
+.use {
+  grid-area: use;
+  align-self: start;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 2px solid var(--action);
+  background: var(--surface);
+  color: var(--action);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 960px) {
+  .page {
+    grid-template-columns: minmax(0, 520px);
+    padding: 24px 16px;
+  }
+}

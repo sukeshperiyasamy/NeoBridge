@@ -1,0 +1,38 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 64px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.title {
+  font-size: 40px;
+  margin-top: 16px;
+}
+
+.lead {
+  font-size: 18px;
+  color: var(--text-secondary);
+  max-width: 60ch;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 0 28px;
+  border-radius: 24px;
+  background: var(--action);
+  color: #fff;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cta:hover {
+  background: var(--action-strong);
+}

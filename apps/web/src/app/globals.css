@@ -1,0 +1,55 @@
+/* Values mirror packages/tokens/src/index.ts */
+:root {
+  --background: #f5f4f2;
+  --surface: #ffffff;
+  --border: #dedbd6;
+  --text: #1c1b19;
+  --text-secondary: #57544f;
+  --text-muted: #6a665f;
+  --action: #5b4fc4;
+  --action-strong: #4b3fa8;
+  --action-soft: #eceafb;
+
+  --brand-lavender: #8378dd;
+  --brand-coral: #fc9283;
+  --brand-slate: #414857;
+
+  --green: #125c38;
+  --yellow: #f2b01e;
+  --red: #d23a31;
+  --red-soft: #fbe5e3;
+  --red-text: #a82820;
+  --grey: #8e8a83;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--background);
+  font-family: var(--font-body), system-ui, sans-serif;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  line-height: 1.3;
+}
+
+a {
+  color: inherit;
+}

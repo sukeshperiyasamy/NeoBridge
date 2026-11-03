@@ -1,0 +1,22 @@
+{
+  "name": "neobridge",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev:mobile": "pnpm --filter @neobridge/mobile start",
+    "dev:web": "pnpm --filter @neobridge/web dev",
+    "dev:api": "pnpm --filter @neobridge/api dev"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "~5.9.2"
+  }
+}
