@@ -6,7 +6,7 @@
  * little-endian (the ESP32's native order).
  */
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Custom "Infant Band" GATT service and its characteristics. */
 export const UUID = {
@@ -72,7 +72,10 @@ export interface StatusPacket {
   timestamp: number;
 }
 
-/** 16 bytes. Summaries only — the band never streams raw sensor data. */
+/**
+ * 20 bytes, one per minute. Summaries only — the band never streams raw
+ * sensor data. The band keeps them in flash until the phone has read them.
+ */
 export interface SummaryRecord {
   timestamp: number;
   /** °C, or null when the band had no usable reading */
@@ -84,6 +87,12 @@ export interface SummaryRecord {
   status: BandStatus;
   flags: number;
   seq: number;
+  /** HRV as RMSSD over the minute, ms; null when the signal was too poor. Trend only. */
+  hrvRmssdMs: number | null;
+  /** 0–100 confidence in the heart-rate / HRV values */
+  hrQuality: number;
+  /** 0–100 */
+  batteryPct: number;
 }
 
 /** 12 bytes */
@@ -96,7 +105,7 @@ export interface AlertEvent {
 }
 
 export const STATUS_PACKET_SIZE = 8;
-export const SUMMARY_RECORD_SIZE = 16;
+export const SUMMARY_RECORD_SIZE = 20;
 export const ALERT_EVENT_SIZE = 12;
 
 /** Sentinel the firmware writes for "no reading" in i16 temperature fields. */
@@ -136,7 +145,29 @@ export function decodeSummary(bytes: Uint8Array): SummaryRecord {
     heartRateBpm: hr === 0 ? null : hr,
     flags: v.getUint8(11),
     seq: v.getUint32(12, true),
+    hrvRmssdMs: v.getUint16(16, true) || null,
+    hrQuality: v.getUint8(18),
+    batteryPct: v.getUint8(19),
   };
+}
+
+/** Inverse of decodeSummary. Used by the simulated band and tests. */
+export function encodeSummary(r: SummaryRecord): Uint8Array {
+  const out = new Uint8Array(SUMMARY_RECORD_SIZE);
+  const v = new DataView(out.buffer);
+  const temp = (c: number | null) => (c === null ? NO_TEMP : Math.round(c * 100));
+  v.setUint32(0, r.timestamp, true);
+  v.setInt16(4, temp(r.skinTempC), true);
+  v.setInt16(6, temp(r.roomTempC), true);
+  v.setUint8(8, r.contactPct);
+  v.setUint8(9, r.status);
+  v.setUint8(10, r.heartRateBpm ?? 0);
+  v.setUint8(11, r.flags);
+  v.setUint32(12, r.seq, true);
+  v.setUint16(16, r.hrvRmssdMs ?? 0, true);
+  v.setUint8(18, r.hrQuality);
+  v.setUint8(19, r.batteryPct);
+  return out;
 }
 
 /** A summary characteristic read returns a page of back-to-back records. */

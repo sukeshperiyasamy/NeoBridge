@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define BAND_PROTOCOL_VERSION 1
+#define BAND_PROTOCOL_VERSION 2
 
 // 6e1b00XX-8f3a-4c1e-9b2a-3d5f7a1c0b00, written in NimBLE's little-endian order
 #define BAND_UUID128(xx)                                                       \
@@ -64,7 +64,13 @@ typedef struct __attribute__((packed)) {
     uint8_t heart_rate_bpm;  // 0 = no usable signal; trend only
     uint8_t flags;
     uint32_t seq;
-} band_summary_record_t;     // 16 bytes
+    uint16_t hrv_rmssd_ms;   // 0 = no usable signal; trend only
+    uint8_t hr_quality;      // 0-100
+    uint8_t battery_pct;     // 0-100
+} band_summary_record_t;     // 20 bytes, one per minute
+
+// Records per summary read. 12 x 20 = 240 bytes fits one read at MTU 247.
+#define BAND_SUMMARY_PAGE 12
 
 typedef struct __attribute__((packed)) {
     uint32_t seq;
@@ -76,5 +82,5 @@ typedef struct __attribute__((packed)) {
 } band_alert_event_t;  // 12 bytes
 
 _Static_assert(sizeof(band_status_packet_t) == 8, "status packet size");
-_Static_assert(sizeof(band_summary_record_t) == 16, "summary record size");
+_Static_assert(sizeof(band_summary_record_t) == 20, "summary record size");
 _Static_assert(sizeof(band_alert_event_t) == 12, "alert event size");

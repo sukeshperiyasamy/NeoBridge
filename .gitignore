@@ -18,3 +18,6 @@ firmware/sdkconfig
 firmware/sdkconfig.old
 firmware/managed_components/
 
+
+# local API database
+apps/api/.data/

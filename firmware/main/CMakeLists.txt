@@ -1,5 +1,5 @@
 idf_component_register(
-  SRCS "main.c" "ble_gatt.c"
+  SRCS "main.c" "ble_gatt.c" "summary_log.c"
   INCLUDE_DIRS "."
   REQUIRES bt nvs_flash
 )

@@ -83,6 +83,20 @@ const en = {
   "band.forgetConfirm": "Remove this band from the phone?",
   "band.remove": "Remove",
   "cancel": "Cancel",
+  "sync.title": "Data",
+  "sync.online": "Internet on",
+  "sync.offline": "No internet · saving on the phone",
+  "sync.server": "Server not reachable · will try again",
+  "sync.allUploaded": "All readings uploaded",
+  "sync.waiting": "{n} readings saved on the phone, waiting to upload",
+  "sync.uploading": "Uploading…",
+  "sync.lastUpload": "Last upload {ago}",
+  "sync.never": "Not uploaded yet",
+  "sync.uploadNow": "Upload now",
+  "ago.now": "just now",
+  "ago.min": "{n} min ago",
+  "ago.hour": "{n} h ago",
+  "ago.day": "{n} days ago",
   "fix.title": "Fix the band",
   "fix.run": "Check again",
   "fix.checking": "Checking…",
@@ -179,6 +193,20 @@ const hi: Record<Key, string> = {
   "band.forgetConfirm": "इस बैंड को फ़ोन से हटाएँ?",
   "band.remove": "हटाएँ",
   "cancel": "रद्द करें",
+  "sync.title": "डेटा",
+  "sync.online": "इंटरनेट चालू",
+  "sync.offline": "इंटरनेट नहीं · फ़ोन में सहेज रहे हैं",
+  "sync.server": "सर्वर नहीं मिला · फिर कोशिश करेंगे",
+  "sync.allUploaded": "सारी जानकारी भेज दी गई",
+  "sync.waiting": "{n} जानकारी फ़ोन में सहेजी है, भेजनी बाकी",
+  "sync.uploading": "भेज रहे हैं…",
+  "sync.lastUpload": "आख़िरी बार {ago} भेजा",
+  "sync.never": "अभी तक नहीं भेजा",
+  "sync.uploadNow": "अभी भेजें",
+  "ago.now": "अभी",
+  "ago.min": "{n} मि. पहले",
+  "ago.hour": "{n} घं. पहले",
+  "ago.day": "{n} दिन पहले",
   "fix.title": "बैंड ठीक करें",
   "fix.run": "फिर से जाँचें",
   "fix.checking": "जाँच रहे हैं…",
@@ -236,6 +264,15 @@ function fill(lang: LanguageCode, template: string, vars?: Vars): string {
 /** A UI string in `lang`. Text-valued vars are resolved in the same language. */
 export function t(lang: LanguageCode, key: Key, vars?: Vars): string {
   return fill(lang, catalogs[lang]?.[key] ?? en[key], vars);
+}
+
+/** "just now", "5 min ago", "2 h ago" … for a past moment in ms. */
+export function ago(lang: LanguageCode, at: number, now = Date.now()): string {
+  const min = Math.floor((now - at) / 60_000);
+  if (min < 1) return t(lang, "ago.now");
+  if (min < 60) return t(lang, "ago.min", { n: min });
+  if (min < 48 * 60) return t(lang, "ago.hour", { n: Math.floor(min / 60) });
+  return t(lang, "ago.day", { n: Math.floor(min / 1440) });
 }
 
 /** A line plus its English gloss (null when the line is already English). */

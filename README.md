@@ -22,7 +22,7 @@ them (`packages/demo`).
 |---|---|---|
 | `apps/mobile` | Caregiver + ASHA app, iOS and Android | Expo SDK 58, Expo Router, react-native-ble-plx |
 | `apps/web` | Website and clinician summary (also opened in a WebView from the ASHA app) | Next.js 16 |
-| `apps/api` | Sync, alerts, SMS/push fan-out | Hono on Node, Postgres (`db/schema.sql`) |
+| `apps/api` | Stores band uploads, trend data; alerts, SMS/push to come | Hono on Node, Postgres / Neon (`db/schema.sql`) |
 | `firmware` | Band firmware | ESP-IDF + NimBLE |
 | `packages/ble-protocol` | GATT UUIDs and packet codecs shared by apps and API | TypeScript |
 | `packages/tokens` | Colours, type, sizes from Figma | TypeScript |
@@ -59,6 +59,36 @@ cd firmware
 idf.py set-target esp32
 idf.py build flash monitor
 ```
+
+## How band data reaches the database
+
+```
+Band (ESP32)  ─Bluetooth─▶  Phone storage (SQLite)  ─internet─▶  API  ─▶  Postgres (Neon)
+keeps 3 days                 "waiting to upload"                  ignores
+until read                   survives offline / restarts          duplicates
+```
+
+1. **Band → phone.** The band records one 20-byte reading a minute (skin and
+   room temperature, contact, HR, HRV, signal quality, battery) and keeps it
+   until the phone reads it. While connected, the phone reads every page since
+   the last reading it has (`apps/mobile/src/ble/band-controller.ts`).
+2. **Phone storage.** Readings are saved on the phone first and marked "not
+   uploaded" (`apps/mobile/src/sync/store.ts`).
+3. **Phone → server.** When the phone has internet it uploads waiting readings
+   in batches of 200 and marks them uploaded once the server confirms. No
+   internet or server down: they stay saved and retry after 5 s, 30 s, 2 min,
+   then every 5 min, and immediately when the network returns
+   (`apps/mobile/src/sync/sync-engine.ts`). The Band tab shows the status.
+4. **Server.** `(band, seq)` is the key, so re-sent batches never duplicate.
+   Trend data: `GET /v1/bands/:bandId/summaries?since=&until=`.
+
+**Database.** Without `DATABASE_URL` the API runs a built-in local Postgres
+(PGlite). For Neon, set `DATABASE_URL` in `apps/api/.env` and run
+`pnpm --filter @neobridge/api db:push` once to create the tables.
+
+**API address on the phone.** Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env`
+(see `.env.example`). A phone on mobile data needs the API on a public https
+address; `localhost` only works in the browser preview.
 
 ## Ground rules from the design
 

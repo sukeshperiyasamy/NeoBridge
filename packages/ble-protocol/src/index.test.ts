@@ -7,6 +7,8 @@ import {
   decodeStatus,
   decodeSummaryPage,
   encodeCommand,
+  encodeSummary,
+  type SummaryRecord,
   fromBase64,
   toBase64,
 } from "./index";
@@ -29,31 +31,47 @@ test("decodes a status packet", () => {
   });
 });
 
-test("decodes a summary page and maps sentinels to null", () => {
-  const bytes = new Uint8Array(32);
-  const v = new DataView(bytes.buffer);
-  // record 0: 35.40 °C skin, 19.60 °C room, HR 142
-  v.setUint32(0, 100, true);
-  v.setInt16(4, 3540, true);
-  v.setInt16(6, 1960, true);
-  v.setUint8(8, 96);
-  v.setUint8(9, BandStatus.Yellow);
-  v.setUint8(10, 142);
-  v.setUint32(12, 7, true);
-  // record 1: no skin reading, no heart rate
-  v.setUint32(16, 160, true);
-  v.setInt16(20, -32768, true);
-  v.setInt16(22, 2000, true);
-  v.setUint8(25, BandStatus.Grey);
-  v.setUint32(28, 8, true);
+const sample: SummaryRecord = {
+  timestamp: 100,
+  skinTempC: 35.4,
+  roomTempC: 19.6,
+  contactPct: 96,
+  heartRateBpm: 142,
+  status: BandStatus.Yellow,
+  flags: 0,
+  seq: 7,
+  hrvRmssdMs: 31,
+  hrQuality: 80,
+  batteryPct: 74,
+};
 
-  const [a, b] = decodeSummaryPage(bytes);
-  assert.equal(a.skinTempC, 35.4);
-  assert.equal(a.roomTempC, 19.6);
-  assert.equal(a.heartRateBpm, 142);
-  assert.equal(a.seq, 7);
+test("summary record is 20 bytes with fields at fixed offsets", () => {
+  const bytes = encodeSummary(sample);
+  const v = new DataView(bytes.buffer);
+  assert.equal(bytes.byteLength, 20);
+  assert.equal(v.getInt16(4, true), 3540); // skin, centi-°C
+  assert.equal(v.getUint32(12, true), 7); // seq
+  assert.equal(v.getUint16(16, true), 31); // HRV
+  assert.equal(v.getUint8(19), 74); // battery
+});
+
+test("decodes a summary page and maps sentinels to null", () => {
+  const missing: SummaryRecord = {
+    ...sample,
+    seq: 8,
+    timestamp: 160,
+    skinTempC: null,
+    heartRateBpm: null,
+    hrvRmssdMs: null,
+    status: BandStatus.Grey,
+  };
+  const page = new Uint8Array([...encodeSummary(sample), ...encodeSummary(missing)]);
+
+  const [a, b] = decodeSummaryPage(page);
+  assert.deepEqual(a, sample);
   assert.equal(b.skinTempC, null);
   assert.equal(b.heartRateBpm, null);
+  assert.equal(b.hrvRmssdMs, null);
   assert.equal(b.status, BandStatus.Grey);
 });
 

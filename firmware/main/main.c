@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "summary_log.h"
 
 static const char *TAG = "band";
 
@@ -26,19 +27,37 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(err);
 
+    summary_log_init();
     ble_gatt_start();
-    ESP_LOGI(TAG, "infant band started");
+    ESP_LOGI(TAG, "neobridge band started");
 
     for (;;) {
         // Placeholder loop: report grey ("no reading") until sensors are wired up.
+        uint32_t now = (uint32_t)time(NULL);
         band_status_packet_t status = {
             .version = BAND_PROTOCOL_VERSION,
             .status = BAND_STATUS_GREY,
             .reason = REASON_NO_SKIN_CONTACT,
             .contact_pct = 0,
-            .timestamp = (uint32_t)time(NULL),
+            .timestamp = now,
         };
         ble_gatt_set_status(&status);
+
+        // One summary per minute. TODO: fill from the minute's sensor window
+        // (skin/room temp, contact, PPG heart rate + RMSSD) and the fuel gauge.
+        band_summary_record_t minute = {
+            .timestamp = now,
+            .skin_centi_c = BAND_NO_TEMP,
+            .room_centi_c = BAND_NO_TEMP,
+            .contact_pct = 0,
+            .status = status.status,
+            .heart_rate_bpm = 0,
+            .hrv_rmssd_ms = 0,
+            .hr_quality = 0,
+            .battery_pct = 0,
+        };
+        summary_log_append(minute);
+
         vTaskDelay(pdMS_TO_TICKS(60 * 1000));
     }
 }

@@ -1,7 +1,15 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import { BleManager, State } from 'react-native-ble-plx';
 
-import { UUID, decodeStatus, fromBase64 } from '@neobridge/ble-protocol';
+import {
+  CommandCode,
+  UUID,
+  decodeStatus,
+  decodeSummaryPage,
+  encodeCommand,
+  fromBase64,
+  toBase64,
+} from '@neobridge/ble-protocol';
 
 import type { BandTransport, BluetoothState } from './types';
 
@@ -66,7 +74,11 @@ export function createBandClient(): BandTransport {
     async connect(id) {
       // autoConnect keeps a pending connection on Android, so the band links
       // back up by itself when it comes into range.
-      const device = await manager.connectToDevice(id, { autoConnect: Platform.OS === 'android' });
+      // MTU 247 lets one read carry a full page of 12 summary records (240 bytes).
+      const device = await manager.connectToDevice(id, {
+        autoConnect: Platform.OS === 'android',
+        requestMTU: 247,
+      });
       await device.discoverAllServicesAndCharacteristics();
       // Reading the encrypted status characteristic triggers bonding.
       await manager.readCharacteristicForDevice(id, UUID.service, UUID.status);
@@ -94,6 +106,17 @@ export function createBandClient(): BandTransport {
     async readBattery(id) {
       const c = await manager.readCharacteristicForDevice(id, UUID.batteryService, UUID.batteryLevel);
       return fromBase64(c.value ?? '')[0] ?? 0;
+    },
+
+    async readSummaries(id, fromSeq) {
+      await manager.writeCharacteristicWithResponseForDevice(
+        id,
+        UUID.service,
+        UUID.command,
+        toBase64(encodeCommand(CommandCode.SetSummaryCursor, fromSeq)),
+      );
+      const c = await manager.readCharacteristicForDevice(id, UUID.service, UUID.summary);
+      return decodeSummaryPage(fromBase64(c.value ?? ''));
     },
 
     async disconnect(id) {

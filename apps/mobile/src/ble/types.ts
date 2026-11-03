@@ -1,4 +1,4 @@
-import type { StatusPacket } from '@neobridge/ble-protocol';
+import type { StatusPacket, SummaryRecord } from '@neobridge/ble-protocol';
 
 export type BluetoothState = 'on' | 'off' | 'unauthorized' | 'unsupported' | 'unknown';
 
@@ -27,5 +27,7 @@ export interface BandTransport {
   readStatus(id: string): Promise<StatusPacket>;
   /** 0–100 */
   readBattery(id: string): Promise<number>;
+  /** One page of saved minute readings with seq >= fromSeq; empty when up to date. */
+  readSummaries(id: string, fromSeq: number): Promise<SummaryRecord[]>;
   disconnect(id: string): Promise<void>;
 }

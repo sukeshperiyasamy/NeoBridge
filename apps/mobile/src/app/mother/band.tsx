@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { bi, t, type Bilingual, type Key, type UiLanguage } from '@neobridge/i18n';
+import { ago, bi, t, type Bilingual, type Key, type UiLanguage } from '@neobridge/i18n';
 import { color, radius, size, status as statusColor } from '@neobridge/tokens';
 
 import {
@@ -17,6 +17,7 @@ import { useBand } from '@/ble/use-band';
 import { BrandHeader } from '@/components/brand-header';
 import { fontFamily } from '@/constants/fonts';
 import { useLanguage } from '@/language';
+import { useSync } from '@/sync/use-sync';
 
 const phaseKey: Record<BandPhase, Key> = {
   loading: 'band.state.connecting',
@@ -53,6 +54,8 @@ export default function BandScreen() {
         {!paired && (
           <PairCard band={band} lang={lang} onScan={() => controller.startScan()} onPair={(b) => controller.pair(b)} />
         )}
+
+        {paired && <DataCard lang={lang} />}
 
         {paired && (
           <FixCard band={band} lang={lang} onRun={() => controller.runChecks()} />
@@ -188,6 +191,47 @@ function PairCard({
       )}
 
       {tried && searched && <Line value={bi(lang, 'band.noneFound')} style={styles.warn} />}
+    </View>
+  );
+}
+
+/** Band → phone → server. Shows whether readings are safely uploaded or waiting on the phone. */
+function DataCard({ lang }: { lang: UiLanguage }) {
+  const [sync, engine] = useSync();
+  const connection: Key = !sync.online ? 'sync.offline' : sync.problem === 'server' ? 'sync.server' : 'sync.online';
+  const ok = sync.online && sync.problem === null;
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.section}>{t(lang, 'sync.title')}</Text>
+
+      <View style={styles.row}>
+        <View style={[styles.dot, { backgroundColor: ok ? statusColor.green.fill : statusColor.yellow.strong }]} />
+        <View style={{ flex: 1 }}>
+          <Line value={bi(lang, connection)} style={styles.rowTitle} />
+        </View>
+        {sync.uploading && <ActivityIndicator color={color.action} />}
+      </View>
+
+      <Line
+        value={
+          sync.uploading
+            ? bi(lang, 'sync.uploading')
+            : sync.pending === 0
+              ? bi(lang, 'sync.allUploaded')
+              : bi(lang, 'sync.waiting', { n: sync.pending })
+        }
+        style={styles.body}
+      />
+      <Text style={styles.muted}>
+        {sync.lastUploadAt
+          ? t(lang, 'sync.lastUpload', { ago: ago(lang, sync.lastUploadAt) })
+          : t(lang, 'sync.never')}
+      </Text>
+
+      {sync.pending > 0 && sync.online && !sync.uploading && (
+        <SecondaryButton label={t(lang, 'sync.uploadNow')} onPress={() => engine.uploadNow()} />
+      )}
     </View>
   );
 }

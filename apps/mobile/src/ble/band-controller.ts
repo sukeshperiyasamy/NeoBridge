@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 import { StatusReason, type StatusPacket } from '@neobridge/ble-protocol';
+
+import { getSyncEngine } from '@/sync/sync-engine';
 
 import { createBandClient } from './band-client';
 import type { BandTransport, FoundBand } from './types';
@@ -28,6 +31,10 @@ const STORAGE_KEY = 'neobridge.pairedBand';
 const RETRY_SECONDS = [3, 10, 30, 60];
 export const LOW_BATTERY = 20;
 const GOOD_CONTACT = 60;
+/** How often to pull saved readings off the band while connected. */
+const COLLECT_MS = Platform.OS === 'web' ? 10_000 : 60_000;
+const PAGE = 12;
+const MAX_PAGES_PER_COLLECT = 100;
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -48,6 +55,7 @@ class BandController {
   private stopScan: (() => void) | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private attempt = 0;
+  private collecting = false;
 
   private state: BandState = {
     phase: 'loading',
@@ -137,11 +145,14 @@ class BandController {
       if (this.state.paired?.id !== band.id) return; // forgotten meanwhile
       this.attempt = 0;
       this.set({ phase: 'connected', lastSeen: Date.now() });
+      const collectTimer = setInterval(() => void this.collect(), COLLECT_MS);
       this.linkSubs.push(
         this.transport.onStatus(band.id, (status) => this.set({ status, lastSeen: Date.now() })),
         this.transport.onDisconnected(band.id, () => this.lost()),
+        () => clearInterval(collectTimer),
       );
       void this.refresh();
+      void this.collect();
     } catch {
       this.lost();
     }
@@ -162,6 +173,34 @@ class BandController {
     this.attempt = 0;
     this.set({ phase: 'connecting' });
     void this.connect();
+  }
+
+  /**
+   * Band → phone: reads every saved minute reading since the last one stored on
+   * the phone, a page at a time, and saves it locally for upload.
+   * TODO: once the firmware persists its log and seq in flash, detect a band
+   * whose seq went backwards (factory reset) and restart from 1.
+   */
+  private async collect() {
+    const id = this.state.paired?.id;
+    if (!id || this.state.phase !== 'connected' || this.collecting) return;
+    this.collecting = true;
+    const sync = getSyncEngine();
+    try {
+      let from = await sync.nextSeq(id);
+      for (let i = 0; i < MAX_PAGES_PER_COLLECT; i++) {
+        const page = await this.transport.readSummaries(id, from);
+        if (page.length === 0) break;
+        await sync.save(id, page);
+        from = page[page.length - 1].seq + 1;
+        this.set({ lastSeen: Date.now(), battery: page[page.length - 1].batteryPct || this.state.battery });
+        if (page.length < PAGE) break;
+      }
+    } catch {
+      // link dropped mid-read: what was saved stays saved, the rest comes next time
+    } finally {
+      this.collecting = false;
+    }
   }
 
   private async refresh() {

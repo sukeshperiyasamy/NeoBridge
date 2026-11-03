@@ -27,7 +27,7 @@
       "package": "in.neobridge.app"
     },
     "web": {
-      "output": "server",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -49,7 +49,8 @@
           ],
           "bluetoothAlwaysPermission": "NeoBridge uses Bluetooth to read your baby’s band, even when the app is closed."
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,

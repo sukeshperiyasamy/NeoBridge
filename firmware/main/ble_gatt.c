@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "summary_log.h"
+
 #include "esp_log.h"
 #include "host/ble_hs.h"
 #include "nimble/nimble_port.h"
@@ -36,9 +38,10 @@ static int on_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt *
     }
 
     if (ble_uuid_cmp(uuid, &uuid_summary.u) == 0) {
-        // TODO: read records from flash starting at summary_cursor, as many as fit the MTU
-        (void)summary_cursor;
-        return 0;
+        // One page from the phone's cursor; an empty value means it is up to date.
+        band_summary_record_t page[BAND_SUMMARY_PAGE];
+        size_t n = summary_log_read(summary_cursor, page, BAND_SUMMARY_PAGE);
+        return os_mbuf_append(ctxt->om, page, n * sizeof(page[0])) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     }
 
     if (ble_uuid_cmp(uuid, &uuid_command.u) == 0) {
