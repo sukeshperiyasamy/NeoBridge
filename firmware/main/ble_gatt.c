@@ -169,7 +169,7 @@ void ble_gatt_start(void) {
     ble_svc_gatt_init();
     ESP_ERROR_CHECK(ble_gatts_count_cfg(gatt_services));
     ESP_ERROR_CHECK(ble_gatts_add_svcs(gatt_services));
-    ble_svc_gap_device_name_set("Infant Band");
+    ble_svc_gap_device_name_set("NeoBridge Band");
 
     nimble_port_freertos_init(host_task);
 }

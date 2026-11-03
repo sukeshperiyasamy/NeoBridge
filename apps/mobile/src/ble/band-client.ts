@@ -1,81 +1,103 @@
-import { BleManager, type Device, type Subscription } from 'react-native-ble-plx';
+import { PermissionsAndroid, Platform } from 'react-native';
+import { BleManager, State } from 'react-native-ble-plx';
 
-import {
-  CommandCode,
-  UUID,
-  decodeStatus,
-  encodeCommand,
-  fromBase64,
-  toBase64,
-  type StatusPacket,
-} from '@neobridge/ble-protocol';
+import { UUID, decodeStatus, fromBase64 } from '@neobridge/ble-protocol';
+
+import type { BandTransport, BluetoothState } from './types';
 
 /**
- * Thin wrapper over react-native-ble-plx for the infant band.
- *
- * Still to build on top of this: bonding during ASHA setup, reconnect with
- * backoff, summary catch-up after being offline, and writing to local SQLite.
+ * Real band over react-native-ble-plx. Pairing (bonding) happens the first
+ * time an encrypted characteristic is read: Android and iOS then show their
+ * own "Pair with NeoBridge Band?" prompt.
  */
-export class BandClient {
-  private manager = new BleManager();
-  private device: Device | null = null;
-  private statusSub: Subscription | null = null;
+export function createBandClient(): BandTransport {
+  const manager = new BleManager({ restoreStateIdentifier: 'neobridge-band' });
 
-  /** Finds the first band advertising the Infant Band service. */
-  scan(onFound: (device: Device) => void, timeoutMs = 15_000): () => void {
-    const timer = setTimeout(() => this.manager.stopDeviceScan(), timeoutMs);
-    this.manager.startDeviceScan([UUID.service], null, (error, device) => {
-      if (error || !device) return;
-      this.manager.stopDeviceScan();
-      clearTimeout(timer);
-      onFound(device);
-    });
-    return () => {
-      clearTimeout(timer);
-      this.manager.stopDeviceScan();
-    };
-  }
+  return {
+    async bluetoothState(): Promise<BluetoothState> {
+      switch (await manager.state()) {
+        case State.PoweredOn:
+          return 'on';
+        case State.PoweredOff:
+          return 'off';
+        case State.Unauthorized:
+          return 'unauthorized';
+        case State.Unsupported:
+          return 'unsupported';
+        default:
+          return 'unknown';
+      }
+    },
 
-  async connect(deviceId: string): Promise<void> {
-    const device = await this.manager.connectToDevice(deviceId, { autoConnect: true });
-    await device.discoverAllServicesAndCharacteristics();
-    this.device = device;
-  }
+    async requestPermissions() {
+      if (Platform.OS !== 'android') return true;
+      const P = PermissionsAndroid.PERMISSIONS;
+      const wanted =
+        Number(Platform.Version) >= 31
+          ? [P.BLUETOOTH_SCAN, P.BLUETOOTH_CONNECT]
+          : [P.ACCESS_FINE_LOCATION];
+      const result = await PermissionsAndroid.requestMultiple(wanted);
+      return wanted.every((p) => result[p] === PermissionsAndroid.RESULTS.GRANTED);
+    },
 
-  async readStatus(): Promise<StatusPacket> {
-    const c = await this.requireDevice().readCharacteristicForService(UUID.service, UUID.status);
-    return decodeStatus(fromBase64(c.value ?? ''));
-  }
+    scan(onFound, timeoutMs, onDone) {
+      let stopped = false;
+      const stop = () => {
+        if (stopped) return;
+        stopped = true;
+        clearTimeout(timer);
+        manager.stopDeviceScan();
+        onDone();
+      };
+      const timer = setTimeout(stop, timeoutMs);
+      manager.startDeviceScan([UUID.service], { allowDuplicates: false }, (error, device) => {
+        if (error) return stop();
+        if (device) {
+          onFound({
+            id: device.id,
+            name: device.localName ?? device.name ?? 'NeoBridge Band',
+            rssi: device.rssi,
+          });
+        }
+      });
+      return stop;
+    },
 
-  onStatus(listener: (status: StatusPacket) => void): void {
-    this.statusSub?.remove();
-    this.statusSub = this.requireDevice().monitorCharacteristicForService(
-      UUID.service,
-      UUID.status,
-      (error, c) => {
-        if (error || !c?.value) return;
-        listener(decodeStatus(fromBase64(c.value)));
-      },
-    );
-  }
+    async connect(id) {
+      // autoConnect keeps a pending connection on Android, so the band links
+      // back up by itself when it comes into range.
+      const device = await manager.connectToDevice(id, { autoConnect: Platform.OS === 'android' });
+      await device.discoverAllServicesAndCharacteristics();
+      // Reading the encrypted status characteristic triggers bonding.
+      await manager.readCharacteristicForDevice(id, UUID.service, UUID.status);
+    },
 
-  async send(code: CommandCode, arg?: number): Promise<void> {
-    await this.requireDevice().writeCharacteristicWithResponseForService(
-      UUID.service,
-      UUID.command,
-      toBase64(encodeCommand(code, arg)),
-    );
-  }
+    isConnected: (id) => manager.isDeviceConnected(id),
 
-  async disconnect(): Promise<void> {
-    this.statusSub?.remove();
-    this.statusSub = null;
-    if (this.device) await this.manager.cancelDeviceConnection(this.device.id);
-    this.device = null;
-  }
+    onDisconnected(id, listener) {
+      const sub = manager.onDeviceDisconnected(id, () => listener());
+      return () => sub.remove();
+    },
 
-  private requireDevice(): Device {
-    if (!this.device) throw new Error('Band not connected');
-    return this.device;
-  }
+    onStatus(id, listener) {
+      const sub = manager.monitorCharacteristicForDevice(id, UUID.service, UUID.status, (error, c) => {
+        if (!error && c?.value) listener(decodeStatus(fromBase64(c.value)));
+      });
+      return () => sub.remove();
+    },
+
+    async readStatus(id) {
+      const c = await manager.readCharacteristicForDevice(id, UUID.service, UUID.status);
+      return decodeStatus(fromBase64(c.value ?? ''));
+    },
+
+    async readBattery(id) {
+      const c = await manager.readCharacteristicForDevice(id, UUID.batteryService, UUID.batteryLevel);
+      return fromBase64(c.value ?? '')[0] ?? 0;
+    },
+
+    async disconnect(id) {
+      await manager.cancelDeviceConnection(id).catch(() => undefined);
+    },
+  };
 }

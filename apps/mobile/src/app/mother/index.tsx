@@ -1,12 +1,15 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BandStatus } from '@neobridge/ble-protocol';
 import { demoAshaName, demoPhone } from '@neobridge/demo';
-import { bi } from '@neobridge/i18n';
+import { bi, type Key } from '@neobridge/i18n';
 import { color, radius, size } from '@neobridge/tokens';
 
+import type { BandPhase } from '@/ble/band-controller';
+import { useBand } from '@/ble/use-band';
 import { BrandHeader } from '@/components/brand-header';
 import { CallButton } from '@/components/call-button';
 import { StatusPanel } from '@/components/status-panel';
@@ -15,21 +18,36 @@ import { useLanguage } from '@/language';
 
 const statuses = [BandStatus.Green, BandStatus.Yellow, BandStatus.Red, BandStatus.Grey];
 
+const chipKey: Record<BandPhase, Key> = {
+  loading: 'band.state.connecting',
+  unpaired: 'band.homeUnpaired',
+  connecting: 'band.state.connecting',
+  connected: 'band.linked',
+  reconnecting: 'band.state.reconnecting',
+};
+
 export default function MotherHome() {
   const [lang] = useLanguage();
   // Placeholder until BandClient feeds real status in. Tap the panel to
   // preview the four states from the Figma file.
   const [status, setStatus] = useState(BandStatus.Green);
-  const linked = bi(lang, 'band.linked');
+  const [band] = useBand();
+  const chip = bi(lang, chipKey[band.phase]);
+  const unpaired = band.phase === 'unpaired';
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <BrandHeader />
 
-      <View style={styles.chip}>
-        <Text style={styles.chipText}>{linked.text}</Text>
-        {linked.gloss && <Text style={styles.chipSub}>{linked.gloss}</Text>}
-      </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.navigate('/mother/band')}
+        style={[styles.chip, unpaired && styles.chipUnpaired]}>
+        <Text style={[styles.chipText, unpaired && { color: color.surface }]}>{chip.text}</Text>
+        {chip.gloss && (
+          <Text style={[styles.chipSub, unpaired && { color: color.actionOnDark }]}>{chip.gloss}</Text>
+        )}
+      </Pressable>
 
       <Pressable onPress={() => setStatus(statuses[(statuses.indexOf(status) + 1) % 4])}>
         <StatusPanel status={status} lang={lang} />
@@ -66,6 +84,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.border,
     backgroundColor: color.surface,
+  },
+  chipUnpaired: {
+    borderColor: color.action,
+    backgroundColor: color.action,
   },
   chipText: {
     fontFamily: fontFamily.bodySemiBold,
