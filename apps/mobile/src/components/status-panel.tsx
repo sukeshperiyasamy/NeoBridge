@@ -1,33 +1,33 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { BandStatus } from '@neobridge/ble-protocol';
-import { t, type LanguageCode } from '@neobridge/i18n';
+import { bi, type Key, type LanguageCode } from '@neobridge/i18n';
 import { color, radius, status as statusColor } from '@neobridge/tokens';
 
 import { fontFamily } from '@/constants/fonts';
 
-const copy = {
+const copy: Record<BandStatus, { title: Key; sub: Key }> = {
   [BandStatus.Green]: { title: 'status.green.title', sub: 'status.green.action' },
   [BandStatus.Yellow]: { title: 'status.yellow.title', sub: 'status.yellow.recheck' },
-  [BandStatus.Red]: { title: 'status.red.title', sub: 'status.red.fallback' },
+  [BandStatus.Red]: { title: 'status.red.title', sub: 'status.red.skinToSkin' },
   [BandStatus.Grey]: { title: 'status.grey.title', sub: 'status.grey.action' },
-} as const;
+};
 
 /**
  * The big status card at the top of Home. Caregivers never see numbers here.
  * TODO: status pictograms from Figma, the Listen button, and the yellow steps.
  */
 export function StatusPanel({ status, lang }: { status: BandStatus; lang: LanguageCode }) {
-  const title = t(lang, copy[status].title);
-  const sub = t(lang, copy[status].sub);
+  const title = bi(lang, copy[status].title);
+  const sub = bi(lang, copy[status].sub);
   const look = panelLook[status];
 
   return (
     <View style={[styles.panel, { backgroundColor: look.background }]}>
-      <Text style={[styles.title, { color: look.heading }]}>{title.local.text}</Text>
-      <Text style={[styles.gloss, { color: look.caption }]}>{title.english}</Text>
-      <Text style={[styles.action, { color: look.heading }]}>{sub.local.text}</Text>
-      <Text style={[styles.gloss, { color: look.caption }]}>{sub.english}</Text>
+      <Text style={[styles.title, { color: look.heading }]}>{title.text}</Text>
+      {title.gloss && <Text style={[styles.gloss, { color: look.caption }]}>{title.gloss}</Text>}
+      <Text style={[styles.action, { color: look.heading }]}>{sub.text}</Text>
+      {sub.gloss && <Text style={[styles.gloss, { color: look.caption }]}>{sub.gloss}</Text>}
     </View>
   );
 }

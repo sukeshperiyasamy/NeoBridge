@@ -1,4 +1,5 @@
 import { BandStatus } from "@neobridge/ble-protocol";
+import type { Key } from "@neobridge/i18n";
 
 const fill = {
   [BandStatus.Green]: "var(--green)",
@@ -7,18 +8,26 @@ const fill = {
   [BandStatus.Grey]: "var(--grey)",
 };
 
-export const statusLabel = {
-  [BandStatus.Green]: { local: "ठीक", english: "No problem" },
-  [BandStatus.Yellow]: { local: "ठंड/गर्मी", english: "Warm and check" },
-  [BandStatus.Red]: { local: "मदद", english: "Help now" },
-  [BandStatus.Grey]: { local: "नहीं पढ़ा", english: "No reading" },
+export const statusLabelKey: Record<BandStatus, Key> = {
+  [BandStatus.Green]: "status.label.green",
+  [BandStatus.Yellow]: "status.label.yellow",
+  [BandStatus.Red]: "status.label.red",
+  [BandStatus.Grey]: "status.label.grey",
 };
 
 /** Each status has its own shape so colour is never the only signal. */
-export function StatusShape({ status, size = 20 }: { status: BandStatus; size?: number }) {
+export function StatusShape({
+  status,
+  size = 20,
+  label,
+}: {
+  status: BandStatus;
+  size?: number;
+  label?: string;
+}) {
   const c = fill[status];
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" aria-label={statusLabel[status].english} role="img">
+    <svg width={size} height={size} viewBox="0 0 20 20" aria-label={label} aria-hidden={!label} role="img">
       {status === BandStatus.Green && <circle cx="10" cy="10" r="9" fill={c} />}
       {status === BandStatus.Yellow && <path d="M10 1.5 19 18H1z" fill={c} />}
       {status === BandStatus.Red && (

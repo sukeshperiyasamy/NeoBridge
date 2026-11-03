@@ -5,7 +5,13 @@
   justify-content: center;
   align-items: start;
   gap: 24px;
-  padding: 48px 16px;
+  padding: 24px 16px 48px;
+}
+
+.top {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .panel,

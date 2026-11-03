@@ -3,12 +3,15 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BandStatus } from '@neobridge/ble-protocol';
-import { demoBabies } from '@neobridge/demo';
+import { demoBabies, demoPhone } from '@neobridge/demo';
+import { pick, t } from '@neobridge/i18n';
 import { color, radius, size, status as statusColor } from '@neobridge/tokens';
 
 import { BrandHeader } from '@/components/brand-header';
+import { CallIconButton } from '@/components/call-icon-button';
 import { StatusShape } from '@/components/status-shape';
 import { fontFamily } from '@/constants/fonts';
+import { useLanguage } from '@/language';
 import { useSession } from '@/session';
 
 // Red first, then yellow, grey, green (Figma: ASHA · My babies).
@@ -24,13 +27,16 @@ const rowBackground = {
 
 export default function AshaHome() {
   const { account } = useSession();
+  const [lang] = useLanguage();
   if (account?.role !== 'asha') return <Redirect href="/login" />;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <BrandHeader />
-      <Text style={styles.title}>मेरे शिशु</Text>
-      <Text style={styles.muted}>My babies · red first · synced 2 min ago</Text>
+      <Text style={styles.title}>{t(lang, 'asha.title')}</Text>
+      <Text style={styles.muted}>
+        {t(lang, 'asha.sub', { ago: { en: '2 min ago', hi: '2 मि. पहले' } })}
+      </Text>
 
       <View style={styles.counts}>
         {order.map((s) => (
@@ -50,12 +56,17 @@ export default function AshaHome() {
             <StatusShape status={b.status} size={28} />
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle}>
-                {b.nameLocal} <Text style={styles.muted}>{b.village} · दिन {b.dayOfLife}</Text>
+                {pick(lang, b.name)}{' '}
+                <Text style={styles.muted}>
+                  {pick(lang, b.village)} · {t(lang, 'day', { n: b.dayOfLife })}
+                </Text>
               </Text>
-              <Text style={styles.muted}>
-                {b.name} · {b.note}
-              </Text>
+              <Text style={styles.muted}>{pick(lang, b.note)}</Text>
             </View>
+            <CallIconButton
+              phone={demoPhone.family}
+              label={`${t(lang, 'call.family')} · ${pick(lang, b.name)}`}
+            />
           </View>
         )}
       />

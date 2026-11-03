@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 
 import { color } from '@neobridge/tokens';
 
+import { LanguageProvider } from '@/language';
 import { SessionProvider } from '@/session';
 
 SplashScreen.preventAutoHideAsync();
@@ -28,11 +29,13 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-    <SessionProvider>
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.background } }}
-      />
-    </SessionProvider>
+    <LanguageProvider>
+      <SessionProvider>
+        <StatusBar style="dark" />
+        <Stack
+          screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.background } }}
+        />
+      </SessionProvider>
+    </LanguageProvider>
   );
 }

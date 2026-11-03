@@ -1,0 +1,24 @@
+.switch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--action-soft);
+}
+
+.option {
+  min-height: 40px;
+  min-width: 76px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--action-strong);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.option[aria-pressed="true"] {
+  background: var(--action);
+  color: #fff;
+}

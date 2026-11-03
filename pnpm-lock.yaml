@@ -197,6 +197,9 @@ importers:
       '@neobridge/ble-protocol':
         specifier: workspace:*
         version: link:../ble-protocol
+      '@neobridge/i18n':
+        specifier: workspace:*
+        version: link:../i18n
 
   packages/i18n: {}
 

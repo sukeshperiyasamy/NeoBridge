@@ -5,45 +5,52 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { demoAccounts, homePath } from '@neobridge/demo';
+import { bi, pick, t, type Bilingual } from '@neobridge/i18n';
 import { color, radius, size } from '@neobridge/tokens';
 
+import { LanguageSwitch } from '@/components/language-switch';
 import { fontFamily } from '@/constants/fonts';
+import { useLanguage } from '@/language';
 import { useSession } from '@/session';
 
 const LOGO_HEIGHT = 48;
 
 export default function LoginScreen() {
   const { signIn } = useSession();
+  const [lang] = useLanguage();
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [failed, setFailed] = useState(false);
 
   function submit() {
     const account = signIn(id, password);
     if (!account) {
-      setError('ID या पासवर्ड गलत है · Wrong ID or password');
+      setFailed(true);
       return;
     }
     router.replace(homePath(account.role));
   }
 
+  const error = bi(lang, 'login.error');
+
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Image
-          source={require('@/assets/images/neobridge-logo.png')}
-          style={{ height: LOGO_HEIGHT, width: (LOGO_HEIGHT * 1261) / 355 }}
-          contentFit="contain"
-          accessibilityLabel="NeoBridge"
-        />
+        <View style={styles.top}>
+          <Image
+            source={require('@/assets/images/neobridge-logo.png')}
+            style={{ height: LOGO_HEIGHT, width: (LOGO_HEIGHT * 1261) / 355 }}
+            contentFit="contain"
+            accessibilityLabel="NeoBridge"
+          />
+          <LanguageSwitch />
+        </View>
 
         <View style={styles.card}>
-          <Text style={styles.title}>लॉग इन करें</Text>
-          <Text style={styles.muted}>Log in to NeoBridge</Text>
+          <Text style={styles.title}>{t(lang, 'login.title')}</Text>
+          {lang !== 'en' && <Text style={styles.muted}>{t('en', 'login.sub')}</Text>}
 
-          <Text style={styles.label}>
-            यूज़र ID <Text style={styles.muted}>User ID</Text>
-          </Text>
+          <FieldLabel value={bi(lang, 'login.id')} />
           <TextInput
             style={styles.input}
             value={id}
@@ -53,9 +60,7 @@ export default function LoginScreen() {
             autoComplete="username"
           />
 
-          <Text style={styles.label}>
-            पासवर्ड <Text style={styles.muted}>Password</Text>
-          </Text>
+          <FieldLabel value={bi(lang, 'login.password')} />
           <TextInput
             style={styles.input}
             value={password}
@@ -65,27 +70,28 @@ export default function LoginScreen() {
             onSubmitEditing={submit}
           />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {failed && (
+            <Text style={styles.error}>
+              {error.text}
+              {error.gloss ? ` · ${error.gloss}` : ''}
+            </Text>
+          )}
 
           <Pressable style={styles.submit} accessibilityRole="button" onPress={submit}>
-            <Text style={styles.submitText}>लॉग इन · Log in</Text>
+            <Text style={styles.submitText}>{t(lang, 'login.submit')}</Text>
           </Pressable>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.demoTitle}>डेमो लॉग इन · Demo logins</Text>
-          <Text style={styles.muted}>
-            Three people, three dashboards. Sample accounts for trying the app.
-          </Text>
+          <Text style={styles.demoTitle}>{t(lang, 'login.demoTitle')}</Text>
+          <Text style={styles.muted}>{t(lang, 'login.demoSub')}</Text>
 
           {demoAccounts.map((a) => (
             <View key={a.role} style={styles.account}>
               <View style={styles.accountTop}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.accountWho}>{a.labelLocal}</Text>
-                  <Text style={styles.muted}>
-                    {a.label} · {a.name}
-                  </Text>
+                  <Text style={styles.accountWho}>{pick(lang, a.label)}</Text>
+                  <Text style={styles.muted}>{pick(lang, a.name)}</Text>
                 </View>
                 <Pressable
                   style={styles.fill}
@@ -93,16 +99,16 @@ export default function LoginScreen() {
                   onPress={() => {
                     setId(a.id);
                     setPassword(a.password);
-                    setError('');
+                    setFailed(false);
                   }}>
-                  <Text style={styles.fillText}>भरें · Fill in</Text>
+                  <Text style={styles.fillText}>{t(lang, 'login.fill')}</Text>
                 </Pressable>
               </View>
               <Text style={styles.cred}>
-                ID: <Text style={styles.credValue}>{a.id}</Text>
+                {t(lang, 'login.id')}: <Text style={styles.credValue}>{a.id}</Text>
               </Text>
               <Text style={styles.cred}>
-                Password: <Text style={styles.credValue}>{a.password}</Text>
+                {t(lang, 'login.password')}: <Text style={styles.credValue}>{a.password}</Text>
               </Text>
             </View>
           ))}
@@ -112,9 +118,24 @@ export default function LoginScreen() {
   );
 }
 
+function FieldLabel({ value }: { value: Bilingual }) {
+  return (
+    <Text style={styles.label}>
+      {value.text} {value.gloss && <Text style={styles.muted}>{value.gloss}</Text>}
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.background },
   content: { padding: size.screenGutter, gap: 16 },
+  top: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   card: {
     backgroundColor: color.surface,
     borderRadius: radius.panel,

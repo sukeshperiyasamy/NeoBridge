@@ -1,9 +1,11 @@
 import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'expo-router/ui';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { bi, type Key } from '@neobridge/i18n';
 import { color, size } from '@neobridge/tokens';
 
 import { fontFamily } from '@/constants/fonts';
+import { useLanguage } from '@/language';
 
 // Browser build of the bottom bar (Figma: Navigation · मुख्य). Phones use the
 // native tabs in app-tabs.tsx.
@@ -13,13 +15,13 @@ export default function AppTabs() {
       <TabSlot style={styles.slot} />
       <TabList style={styles.bar}>
         <TabTrigger name="index" href="/mother" asChild>
-          <TabButton local="घर" english="Home" />
+          <TabButton labelKey="nav.home" />
         </TabTrigger>
         <TabTrigger name="call" href="/mother/call" asChild>
-          <TabButton local="फ़ोन" english="Call" />
+          <TabButton labelKey="nav.call" />
         </TabTrigger>
         <TabTrigger name="band" href="/mother/band" asChild>
-          <TabButton local="बैंड" english="Band" />
+          <TabButton labelKey="nav.band" />
         </TabTrigger>
       </TabList>
     </Tabs>
@@ -28,17 +30,18 @@ export default function AppTabs() {
 
 // `ref` is typed for View, not Pressable, so it is not forwarded.
 function TabButton({
-  local,
-  english,
+  labelKey,
   isFocused,
   ref: _ref,
   ...props
-}: TabTriggerSlotProps & { local: string; english: string }) {
+}: TabTriggerSlotProps & { labelKey: Key }) {
+  const [lang] = useLanguage();
+  const label = bi(lang, labelKey);
   return (
     <Pressable {...props} style={styles.tab}>
       <View style={[styles.pill, isFocused && styles.pillActive]} />
-      <Text style={[styles.local, isFocused && styles.localActive]}>{local}</Text>
-      <Text style={styles.english}>{english}</Text>
+      <Text style={[styles.local, isFocused && styles.localActive]}>{label.text}</Text>
+      {label.gloss && <Text style={styles.english}>{label.gloss}</Text>}
     </Pressable>
   );
 }

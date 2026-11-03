@@ -1,18 +1,22 @@
 import { StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { t } from '@neobridge/i18n';
 import { color, size } from '@neobridge/tokens';
 
 import { BrandHeader } from '@/components/brand-header';
 import { fontFamily } from '@/constants/fonts';
+import { useLanguage } from '@/language';
 
 // TODO: band on wrist, battery, right fit, daily wrist check (Figma: "Band tab").
 export default function BandScreen() {
+  const [lang] = useLanguage();
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <BrandHeader />
-      <Text style={styles.title}>बैंड</Text>
-      <Text style={styles.sub}>Band: wear, charge, check</Text>
+      <Text style={styles.title}>{t(lang, 'band.title')}</Text>
+      <Text style={styles.sub}>{t(lang, 'band.sub')}</Text>
     </SafeAreaView>
   );
 }

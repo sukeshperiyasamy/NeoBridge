@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@neobridge/ble-protocol": "workspace:*"
+    "@neobridge/ble-protocol": "workspace:*",
+    "@neobridge/i18n": "workspace:*"
   }
 }
