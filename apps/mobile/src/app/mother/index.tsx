@@ -7,7 +7,7 @@ import { demoAshaName, demoPhone } from '@neobridge/demo';
 import { bi, type Key } from '@neobridge/i18n';
 import { color, radius, size } from '@neobridge/tokens';
 
-import type { BandPhase, BandState } from '@/ble/band-controller';
+import { bandStatusOf, type BandPhase } from '@/ble/band-controller';
 import { useBand } from '@/ble/use-band';
 import { BrandHeader } from '@/components/brand-header';
 import { CallButton } from '@/components/call-button';
@@ -15,18 +15,9 @@ import { StatusPanel } from '@/components/status-panel';
 import { fontFamily } from '@/constants/fonts';
 import { useLanguage } from '@/language';
 
-/** A status older than this is not shown as current: the family sees grey instead. */
-const STALE_MS = 5 * 60_000;
-
-/**
- * What the family sees comes only from the band. No band, no link, or no fresh
- * reading → grey ("the band cannot read"), never an old status dressed as new.
- */
-function homeStatus(band: BandState): BandStatus {
-  if (band.phase !== 'connected' || !band.status || band.lastSeen === null) return BandStatus.Grey;
-  if (Date.now() - band.lastSeen > STALE_MS) return BandStatus.Grey;
-  return band.status.status;
-}
+// What the family sees is the status rules' answer (packages/rules). No reading
+// for 90 s, no contact or a sensor error → grey ("check the band"), never an old
+// status dressed as new. An open red stays red until the ASHA closes it.
 
 const chipKey: Record<BandPhase, Key> = {
   loading: 'band.state.connecting',
@@ -41,7 +32,7 @@ export default function MotherHome() {
   const [band] = useBand();
   const chip = bi(lang, chipKey[band.phase]);
   const unpaired = band.phase === 'unpaired';
-  const status = homeStatus(band);
+  const status = bandStatusOf(band.rules.status);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>

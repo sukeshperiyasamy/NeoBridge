@@ -19,6 +19,8 @@ export const UUID = {
   alert: "6e1b0004-8f3a-4c1e-9b2a-3d5f7a1c0b00",
   /** write · Command */
   command: "6e1b0005-8f3a-4c1e-9b2a-3d5f7a1c0b00",
+  /** notify · LiveReading, every 30 s (5 s in demo mode); the phone runs the status rules on it */
+  reading: "6e1b0006-8f3a-4c1e-9b2a-3d5f7a1c0b00",
 
   // Standard Bluetooth SIG services the band also exposes
   batteryService: "0000180f-0000-1000-8000-00805f9b34fb",
@@ -59,7 +61,36 @@ export enum CommandCode {
   SetSummaryCursor = 0x03,
   /** Family reported a danger sign from the daily check (always red). */
   ReportDangerSign = 0x04,
+  /** Buzz once so the family knows which band is theirs. */
+  TestBuzz = 0x05,
+  /** Set the band's clock: u32 unix seconds follows. */
+  SetTime = 0x06,
+  /** Tell the band the phone's status so it plays that pattern: u8 BandStatus follows. */
+  SetStatus = 0x07,
 }
+
+/** Bits in LiveReading.flags and SummaryRecord.flags */
+export const ReadingFlag = {
+  SensorError: 1 << 0,
+  NoContact: 1 << 1,
+} as const;
+
+/**
+ * 12 bytes, notified every 30 s (5 s in demo mode). Raw skin temperature before
+ * the calibration offset; the phone applies the offset and the rules.
+ */
+export interface LiveReading {
+  timestamp: number;
+  skinTempC: number | null;
+  roomTempC: number | null;
+  /** 0–100 */
+  contactPct: number;
+  heartRateBpm: number | null;
+  batteryPct: number;
+  flags: number;
+}
+
+export const LIVE_READING_SIZE = 12;
 
 /** 8 bytes */
 export interface StatusPacket {
@@ -190,14 +221,43 @@ export function decodeAlert(bytes: Uint8Array): AlertEvent {
   };
 }
 
+export function decodeReading(bytes: Uint8Array): LiveReading {
+  const v = view(bytes, LIVE_READING_SIZE, "LiveReading");
+  const hr = v.getUint8(9);
+  return {
+    timestamp: v.getUint32(0, true),
+    skinTempC: centiDegrees(v.getInt16(4, true)),
+    roomTempC: centiDegrees(v.getInt16(6, true)),
+    contactPct: v.getUint8(8),
+    heartRateBpm: hr === 0 ? null : hr,
+    batteryPct: v.getUint8(10),
+    flags: v.getUint8(11),
+  };
+}
+
+/** Inverse of decodeReading. Used by the simulated band and tests. */
+export function encodeReading(r: LiveReading): Uint8Array {
+  const out = new Uint8Array(LIVE_READING_SIZE);
+  const v = new DataView(out.buffer);
+  const temp = (c: number | null) => (c === null ? NO_TEMP : Math.round(c * 100));
+  v.setUint32(0, r.timestamp, true);
+  v.setInt16(4, temp(r.skinTempC), true);
+  v.setInt16(6, temp(r.roomTempC), true);
+  v.setUint8(8, r.contactPct);
+  v.setUint8(9, r.heartRateBpm ?? 0);
+  v.setUint8(10, r.batteryPct);
+  v.setUint8(11, r.flags);
+  return out;
+}
+
 export function encodeCommand(code: CommandCode, arg?: number): Uint8Array {
-  if (code === CommandCode.SetSummaryCursor) {
+  if (code === CommandCode.SetSummaryCursor || code === CommandCode.SetTime) {
     const out = new Uint8Array(5);
     out[0] = code;
     new DataView(out.buffer).setUint32(1, arg ?? 0, true);
     return out;
   }
-  if (code === CommandCode.ReportDangerSign) {
+  if (code === CommandCode.ReportDangerSign || code === CommandCode.SetStatus) {
     return Uint8Array.of(code, arg ?? 0);
   }
   return Uint8Array.of(code);

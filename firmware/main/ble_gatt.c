@@ -18,10 +18,12 @@ static const ble_uuid128_t uuid_status = BAND_UUID128(BAND_UUID_STATUS);
 static const ble_uuid128_t uuid_summary = BAND_UUID128(BAND_UUID_SUMMARY);
 static const ble_uuid128_t uuid_alert = BAND_UUID128(BAND_UUID_ALERT);
 static const ble_uuid128_t uuid_command = BAND_UUID128(BAND_UUID_COMMAND);
+static const ble_uuid128_t uuid_reading = BAND_UUID128(BAND_UUID_READING);
 
 static uint16_t conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t status_handle;
 static uint16_t alert_handle;
+static uint16_t reading_handle;
 static band_status_packet_t current_status = {
     .version = BAND_PROTOCOL_VERSION,
     .status = BAND_STATUS_GREY,
@@ -55,10 +57,26 @@ static int on_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt *
             if (len < 5) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
             memcpy(&summary_cursor, &buf[1], sizeof(summary_cursor));
             break;
-        case CMD_RECHECK:
+        case CMD_TEST_BUZZ:
+            band_on_test_buzz();
+            break;
+        case CMD_SET_TIME: {
+            if (len < 5) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+            uint32_t t;
+            memcpy(&t, &buf[1], sizeof(t));
+            band_on_set_time(t);
+            break;
+        }
+        case CMD_SET_STATUS:
+            if (len < 2 || buf[1] > BAND_STATUS_GREY) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+            band_on_set_status((band_status_t)buf[1]);
+            break;
         case CMD_ACK_RED:
+            band_on_ack_red();
+            break;
+        case CMD_RECHECK:
         case CMD_REPORT_DANGER_SIGN:
-            // TODO: hand to the rules engine
+            // TODO: hand to the band's own rules engine
             ESP_LOGI(TAG, "command 0x%02x", buf[0]);
             break;
         default:
@@ -91,6 +109,12 @@ static const struct ble_gatt_svc_def gatt_services[] = {
                     .uuid = &uuid_alert.u,
                     .access_cb = on_access,
                     .val_handle = &alert_handle,
+                    .flags = BLE_GATT_CHR_F_NOTIFY,
+                },
+                {
+                    .uuid = &uuid_reading.u,
+                    .access_cb = on_access,
+                    .val_handle = &reading_handle,
                     .flags = BLE_GATT_CHR_F_NOTIFY,
                 },
                 {
@@ -189,5 +213,12 @@ void ble_gatt_send_alert(const band_alert_event_t *alert) {
     if (conn_handle != BLE_HS_CONN_HANDLE_NONE) {
         struct os_mbuf *om = ble_hs_mbuf_from_flat(alert, sizeof(*alert));
         ble_gatts_notify_custom(conn_handle, alert_handle, om);
+    }
+}
+
+void ble_gatt_send_reading(const band_live_reading_t *reading) {
+    if (conn_handle != BLE_HS_CONN_HANDLE_NONE) {
+        struct os_mbuf *om = ble_hs_mbuf_from_flat(reading, sizeof(*reading));
+        ble_gatts_notify_custom(conn_handle, reading_handle, om);
     }
 }

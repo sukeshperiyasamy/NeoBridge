@@ -4,6 +4,7 @@ import { BleManager, State } from 'react-native-ble-plx';
 import {
   CommandCode,
   UUID,
+  decodeReading,
   decodeStatus,
   decodeSummaryPage,
   encodeCommand,
@@ -20,6 +21,9 @@ import type { BandTransport, BluetoothState } from './types';
  */
 export function createBandClient(): BandTransport {
   const manager = new BleManager({ restoreStateIdentifier: 'neobridge-band' });
+  const command = async (id: string, bytes: Uint8Array) => {
+    await manager.writeCharacteristicWithResponseForDevice(id, UUID.service, UUID.command, toBase64(bytes));
+  };
 
   return {
     async bluetoothState(): Promise<BluetoothState> {
@@ -109,15 +113,22 @@ export function createBandClient(): BandTransport {
     },
 
     async readSummaries(id, fromSeq) {
-      await manager.writeCharacteristicWithResponseForDevice(
-        id,
-        UUID.service,
-        UUID.command,
-        toBase64(encodeCommand(CommandCode.SetSummaryCursor, fromSeq)),
-      );
+      await command(id, encodeCommand(CommandCode.SetSummaryCursor, fromSeq));
       const c = await manager.readCharacteristicForDevice(id, UUID.service, UUID.summary);
       return decodeSummaryPage(fromBase64(c.value ?? ''));
     },
+
+    onReading(id, listener) {
+      const sub = manager.monitorCharacteristicForDevice(id, UUID.service, UUID.reading, (error, c) => {
+        if (!error && c?.value) listener(decodeReading(fromBase64(c.value)));
+      });
+      return () => sub.remove();
+    },
+
+    testBuzz: (id) => command(id, encodeCommand(CommandCode.TestBuzz)),
+    setTime: (id, t) => command(id, encodeCommand(CommandCode.SetTime, t)),
+    setStatus: (id, s) => command(id, encodeCommand(CommandCode.SetStatus, s)),
+    ackRed: (id) => command(id, encodeCommand(CommandCode.AcknowledgeRed)),
 
     async disconnect(id) {
       await manager.cancelDeviceConnection(id).catch(() => undefined);

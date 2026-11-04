@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ago, bi, t, type Bilingual, type Key, type UiLanguage } from '@neobridge/i18n';
@@ -13,6 +13,7 @@ import {
   type CheckKey,
   type CheckResult,
 } from '@/ble/band-controller';
+import { simScenarios, type SimScenario } from '@/ble/sim-band';
 import { useBand } from '@/ble/use-band';
 import { BrandHeader } from '@/components/brand-header';
 import { fontFamily } from '@/constants/fonts';
@@ -53,6 +54,24 @@ export default function BandScreen() {
 
         {!paired && (
           <PairCard band={band} lang={lang} onScan={() => controller.startScan()} onPair={(b) => controller.pair(b)} />
+        )}
+
+        {!paired && (
+          <View style={styles.card}>
+            <Line value={bi(lang, 'band.useDemoHint')} style={styles.body} />
+            <SecondaryButton label={t(lang, 'band.useDemo')} onPress={() => void controller.useDemoBand()} />
+          </View>
+        )}
+
+        {paired && band.phase === 'connected' && <BuzzCard lang={lang} onBuzz={() => controller.testBuzz()} />}
+
+        {paired && controller.isDemoBand() && (
+          <DemoCard
+            band={band}
+            lang={lang}
+            onScenario={(s) => controller.setScenario(s)}
+            onDemoMode={(on) => void controller.setDemoMode(on)}
+          />
         )}
 
         {paired && <DataCard lang={lang} />}
@@ -191,6 +210,73 @@ function PairCard({
       )}
 
       {tried && searched && <Line value={bi(lang, 'band.noneFound')} style={styles.warn} />}
+    </View>
+  );
+}
+
+/** M7: buzz once so the family knows which band is theirs. */
+function BuzzCard({ lang, onBuzz }: { lang: UiLanguage; onBuzz: () => Promise<boolean> }) {
+  const [buzzed, setBuzzed] = useState(false);
+  return (
+    <View style={styles.card}>
+      <SecondaryButton
+        label={t(lang, 'band.testBuzz')}
+        onPress={() => {
+          void onBuzz().then((ok) => {
+            setBuzzed(ok);
+            if (ok) setTimeout(() => setBuzzed(false), 4000);
+          });
+        }}
+      />
+      {buzzed && <Line value={bi(lang, 'band.testBuzzDone')} style={styles.muted} />}
+    </View>
+  );
+}
+
+const scenarioKey: Record<SimScenario, Key> = {
+  normal: 'demo.scenario.normal',
+  cooling: 'demo.scenario.cooling',
+  veryCold: 'demo.scenario.veryCold',
+  hot: 'demo.scenario.hot',
+  offBody: 'demo.scenario.offBody',
+  lowBattery: 'demo.scenario.lowBattery',
+};
+
+/** Only with the demo band: pick what it acts out, and the short demo timings. */
+function DemoCard({
+  band,
+  lang,
+  onScenario,
+  onDemoMode,
+}: {
+  band: BandState;
+  lang: UiLanguage;
+  onScenario: (s: SimScenario) => void;
+  onDemoMode: (on: boolean) => void;
+}) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.section}>{t(lang, 'demo.title')}</Text>
+      <Text style={styles.rowTitle}>{t(lang, 'demo.scenario')}</Text>
+      <View style={styles.chips}>
+        {simScenarios.map((s) => {
+          const on = band.scenario === s;
+          return (
+            <Pressable
+              key={s}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              onPress={() => onScenario(s)}
+              style={[styles.chip, on && styles.chipOn]}>
+              <Text style={[styles.chipText, on && { color: color.surface }]}>{t(lang, scenarioKey[s])}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={[styles.row, { justifyContent: 'space-between' }]}>
+        <Text style={[styles.body, { flex: 1 }]}>{t(lang, 'demo.mode')}</Text>
+        <Switch value={band.demoMode} onValueChange={onDemoMode} trackColor={{ true: color.action }} />
+      </View>
     </View>
   );
 }
@@ -384,6 +470,18 @@ const styles = StyleSheet.create({
   check: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   mark: { width: 22, fontFamily: fontFamily.bodyBold, fontSize: 18, lineHeight: 22, color: color.textMuted },
   buttons: { flexDirection: 'row', gap: 10 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    minHeight: size.touchMin,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: radius.chip,
+    borderWidth: 2,
+    borderColor: color.action,
+    backgroundColor: color.surface,
+  },
+  chipOn: { backgroundColor: color.action },
+  chipText: { fontFamily: fontFamily.bodySemiBold, fontSize: 14, color: color.action },
   primary: {
     minHeight: 56,
     paddingVertical: 8,

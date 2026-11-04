@@ -1,4 +1,4 @@
-import type { StatusPacket, SummaryRecord } from '@neobridge/ble-protocol';
+import type { BandStatus, LiveReading, StatusPacket, SummaryRecord } from '@neobridge/ble-protocol';
 
 export type BluetoothState = 'on' | 'off' | 'unauthorized' | 'unsupported' | 'unknown';
 
@@ -29,5 +29,13 @@ export interface BandTransport {
   readBattery(id: string): Promise<number>;
   /** One page of saved minute readings with seq >= fromSeq; empty when up to date. */
   readSummaries(id: string, fromSeq: number): Promise<SummaryRecord[]>;
+  /** Live readings, every 30 s (5 s on the demo band). */
+  onReading(id: string, listener: (reading: LiveReading) => void): () => void;
+  testBuzz(id: string): Promise<void>;
+  setTime(id: string, unixSeconds: number): Promise<void>;
+  /** Tells the band which status pattern to play (buzz, light). */
+  setStatus(id: string, status: BandStatus): Promise<void>;
+  /** Stops the band's red buzzing. */
+  ackRed(id: string): Promise<void>;
   disconnect(id: string): Promise<void>;
 }

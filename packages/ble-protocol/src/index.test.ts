@@ -5,8 +5,11 @@ import {
   CommandCode,
   StatusReason,
   decodeStatus,
+  ReadingFlag,
+  decodeReading,
   decodeSummaryPage,
   encodeCommand,
+  encodeReading,
   encodeSummary,
   type SummaryRecord,
   fromBase64,
@@ -73,6 +76,27 @@ test("decodes a summary page and maps sentinels to null", () => {
   assert.equal(b.heartRateBpm, null);
   assert.equal(b.hrvRmssdMs, null);
   assert.equal(b.status, BandStatus.Grey);
+});
+
+test("live reading round trip at fixed offsets", () => {
+  const r = {
+    timestamp: 1_792_000_000,
+    skinTempC: 35.2,
+    roomTempC: null,
+    contactPct: 88,
+    heartRateBpm: 144,
+    batteryPct: 61,
+    flags: ReadingFlag.NoContact,
+  };
+  const bytes = encodeReading(r);
+  assert.equal(bytes.byteLength, 12);
+  assert.equal(new DataView(bytes.buffer).getInt16(4, true), 3520);
+  assert.deepEqual(decodeReading(bytes), r);
+});
+
+test("encodes set-time and set-status commands", () => {
+  assert.deepEqual([...encodeCommand(CommandCode.SetTime, 1)], [0x06, 1, 0, 0, 0]);
+  assert.deepEqual([...encodeCommand(CommandCode.SetStatus, BandStatus.Red)], [0x07, 2]);
 });
 
 test("encodes the summary cursor command", () => {

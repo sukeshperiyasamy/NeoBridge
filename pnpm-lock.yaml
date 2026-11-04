@@ -63,6 +63,9 @@ importers:
       '@neobridge/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@neobridge/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@neobridge/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens
@@ -220,6 +223,15 @@ importers:
         version: link:../i18n
 
   packages/i18n: {}
+
+  packages/rules:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.5
+      tsx:
+        specifier: ^4.19.0
+        version: 4.23.15
 
   packages/tokens: {}
 
