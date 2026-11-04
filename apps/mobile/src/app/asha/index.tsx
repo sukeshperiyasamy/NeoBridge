@@ -1,101 +1,65 @@
-import { Redirect } from 'expo-router';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { useState } from 'react';
 
-import { BandStatus } from '@neobridge/ble-protocol';
-import { demoBabies, demoPhone } from '@neobridge/demo';
-import { pick, t } from '@neobridge/i18n';
-import { color, radius, size, status as statusColor } from '@neobridge/tokens';
+import type { BabyListItem } from '@neobridge/domain';
+import { ago } from '@neobridge/i18n';
 
+import { useApi } from '@/api/cache';
 import { BrandHeader } from '@/components/brand-header';
-import { CallIconButton } from '@/components/call-icon-button';
-import { StatusShape } from '@/components/status-shape';
-import { fontFamily } from '@/constants/fonts';
-import { useLanguage } from '@/language';
-import { useSession } from '@/session';
+import { BabyRow, villageName } from '@/components/staff';
+import { Choice, Empty, Field, H1, Muted, QueryView, Screen, useT } from '@/components/ui';
 
-// Red first, then yellow, grey, green (Figma: ASHA · My babies).
-const order = [BandStatus.Red, BandStatus.Yellow, BandStatus.Grey, BandStatus.Green];
-const babies = [...demoBabies].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
+type Filter = 'all' | 'red' | 'yellow' | 'grey' | 'visits';
 
-const rowBackground = {
-  [BandStatus.Red]: statusColor.red.soft,
-  [BandStatus.Yellow]: statusColor.yellow.panel,
-  [BandStatus.Grey]: statusColor.grey.panel,
-  [BandStatus.Green]: color.surface,
-};
-
-export default function AshaHome() {
-  const { account } = useSession();
-  const [lang] = useLanguage();
-  if (account?.role !== 'asha') return <Redirect href="/login" />;
+/** A1: counts by status, then babies sorted red first (unacked, acked), yellow, grey, overdue, due today, green. */
+export default function AshaBabies() {
+  const { t, lang } = useT();
+  const q = useApi<{ babies: BabyListItem[] }>('/v1/babies', { pollMs: 30_000 });
+  const [filter, setFilter] = useState<Filter>('all');
+  const [search, setSearch] = useState('');
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <BrandHeader />
-      <Text style={styles.title}>{t(lang, 'asha.title')}</Text>
-      <Text style={styles.muted}>
-        {t(lang, 'asha.sub', { ago: { en: '2 min ago', hi: '2 मि. पहले' } })}
-      </Text>
-
-      <View style={styles.counts}>
-        {order.map((s) => (
-          <View key={s} style={styles.count}>
-            <StatusShape status={s} size={16} />
-            <Text style={styles.countText}>{demoBabies.filter((b) => b.status === s).length}</Text>
-          </View>
-        ))}
-      </View>
-
-      <FlatList
-        data={babies}
-        keyExtractor={(b) => b.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item: b }) => (
-          <View style={[styles.row, { backgroundColor: rowBackground[b.status] }]}>
-            <StatusShape status={b.status} size={28} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>
-                {pick(lang, b.name)}{' '}
-                <Text style={styles.muted}>
-                  {pick(lang, b.village)} · {t(lang, 'day', { n: b.dayOfLife })}
-                </Text>
-              </Text>
-              <Text style={styles.muted}>{pick(lang, b.note)}</Text>
-            </View>
-            <CallIconButton
-              phone={demoPhone.family}
-              label={`${t(lang, 'call.family')} · ${pick(lang, b.name)}`}
-            />
-          </View>
-        )}
-      />
-    </SafeAreaView>
+    <Screen header={<BrandHeader />}>
+      <H1>{t('asha.title')}</H1>
+      <QueryView q={q}>
+        {({ babies }) => {
+          const count = (s: string) => babies.filter((b) => b.baby.status === s).length;
+          const needle = search.trim().toLowerCase();
+          const shown = babies.filter((b) => {
+            if (filter === 'visits' && !(b.nextVisit && (b.nextVisit.state === 'overdue' || b.nextVisit.state === 'due'))) return false;
+            if (filter !== 'all' && filter !== 'visits' && b.baby.status !== filter) return false;
+            if (!needle) return true;
+            return [b.baby.name, b.mother.name, b.mother.phone, villageName(b.mother.village, 'en'), villageName(b.mother.village, 'hi')]
+              .join(' ')
+              .toLowerCase()
+              .includes(needle);
+          });
+          return (
+            <>
+              <Muted>
+                {t('asha.counts', { red: count('red'), yellow: count('yellow'), grey: count('grey') })}
+                {q.at ? ` · ${t('asha.synced', { ago: ago(lang, q.at) })}` : ''}
+              </Muted>
+              <Choice<Filter>
+                options={[
+                  { value: 'all', label: t('asha.filter.all') },
+                  { value: 'red', label: `${t('asha.filter.red')} ${count('red')}` },
+                  { value: 'yellow', label: `${t('asha.filter.yellow')} ${count('yellow')}` },
+                  { value: 'grey', label: `${t('asha.filter.grey')} ${count('grey')}` },
+                  { value: 'visits', label: t('asha.filter.visits') },
+                ]}
+                value={filter}
+                onChange={setFilter}
+              />
+              <Field label={t('asha.search')} value={search} onChangeText={setSearch} />
+              {shown.length === 0 && <Empty />}
+              {shown.map((b) => (
+                <BabyRow key={b.baby.id} item={b} onPress={() => router.push({ pathname: '/baby/[id]', params: { id: b.baby.id } })} />
+              ))}
+            </>
+          );
+        }}
+      </QueryView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.background, paddingHorizontal: size.screenGutter },
-  title: { fontFamily: fontFamily.heading, fontSize: 28, lineHeight: 38, color: color.text },
-  muted: { fontFamily: fontFamily.body, fontSize: 13, color: color.textMuted },
-  counts: { flexDirection: 'row', gap: 8, marginVertical: 12 },
-  count: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: radius.chip,
-    backgroundColor: color.surface,
-  },
-  countText: { fontFamily: fontFamily.bodyBold, fontSize: 15, color: color.text },
-  list: { gap: 10, paddingBottom: 24 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 14,
-    borderRadius: radius.card,
-  },
-  rowTitle: { fontFamily: fontFamily.bodyBold, fontSize: 17, color: color.text },
-});

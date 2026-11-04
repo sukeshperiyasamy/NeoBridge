@@ -24,7 +24,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "in.neobridge.app"
+      "package": "in.neobridge.app",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "output": "single",
@@ -51,7 +57,26 @@
           "bluetoothAlwaysPermission": "NeoBridge uses Bluetooth to read your baby’s band, even when the app is closed."
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "color": "#5b4fc4",
+          "sounds": [
+            "./assets/sounds/alarm.wav",
+            "./assets/sounds/chime.wav"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -56,6 +56,8 @@ export interface BandState {
   episode: Episode | null;
   /** when the yellow re-check is due, ms */
   recheckAt: number | null;
+  /** when the open yellow started, ms */
+  yellowStartedAt: number | null;
   /** shorter timings: 2 min → 10 s, 1 h → 1 min */
   demoMode: boolean;
   /** the scenario the demo band is acting out */
@@ -118,6 +120,7 @@ class BandController {
   /** last status sent to the band, so only changes are sent */
   private toldBand: BandStatus | null = null;
   private dangerSignAt: number | null = null;
+  private calibrationC = 0;
 
   private state: BandState = {
     phase: 'loading',
@@ -132,6 +135,7 @@ class BandController {
     rules: { status: 'grey', reason: 'noReading', skinC: null, rule: 3 },
     episode: null,
     recheckAt: null,
+    yellowStartedAt: null,
     demoMode: false,
     scenario: 'normal',
   };
@@ -243,6 +247,20 @@ class BandController {
     this.set({ scenario });
   }
 
+  // ---- setup -------------------------------------------------------------
+
+  /** Android 12+ Bluetooth permissions (asked from the permissions primer). */
+  requestPermissions(): Promise<boolean> {
+    return this.real.requestPermissions();
+  }
+
+  /** The band's calibration offset from its assignment on the server (°C). */
+  setCalibration(offsetC: number) {
+    if (this.calibrationC === offsetC) return;
+    this.calibrationC = offsetC;
+    this.runRules();
+  }
+
   // ---- band actions ------------------------------------------------------
 
   /** Buzz once so the family can tell which band is theirs. */
@@ -299,8 +317,7 @@ class BandController {
     }));
     const prev = this.rulesState;
     const result = evaluate(
-      // TODO: per-band calibration offset from the band assignment (API, phase 3)
-      { now, readings, calibrationOffsetC: 0, dangerSignAt: this.dangerSignAt },
+      { now, readings, calibrationOffsetC: this.calibrationC, dangerSignAt: this.dangerSignAt },
       prev,
       this.state.demoMode ? demoConfig : defaultConfig,
     );
@@ -309,6 +326,7 @@ class BandController {
 
     const view: RulesView = { status: result.status, reason: result.reason, skinC: result.skinC, rule: result.rule };
     const recheckAt = result.state.yellow?.recheckAt ?? null;
+    const yellowStartedAt = result.state.yellow?.startedAt ?? null;
     const r = this.state.rules;
     if (
       r.status !== view.status ||
@@ -318,7 +336,7 @@ class BandController {
       this.state.episode !== result.state.episode ||
       this.state.recheckAt !== recheckAt
     ) {
-      this.set({ rules: view, episode: result.state.episode, recheckAt });
+      this.set({ rules: view, episode: result.state.episode, recheckAt, yellowStartedAt });
     }
     void this.tellBand(bandStatusOf(result.status));
   }

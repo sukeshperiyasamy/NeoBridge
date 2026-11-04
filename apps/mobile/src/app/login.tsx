@@ -1,191 +1,192 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { demoAccounts, homePath } from '@neobridge/demo';
-import { bi, pick, t, type Bilingual } from '@neobridge/i18n';
-import { color, radius, size } from '@neobridge/tokens';
+import { demoLogins } from '@neobridge/demo';
+import { pick } from '@neobridge/i18n';
+import { color, radius } from '@neobridge/tokens';
 
+import { ApiError } from '@/api/client';
 import { LanguageSwitch } from '@/components/language-switch';
+import { Body, Button, Card, Field, H1, Line, Muted, Screen, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
-import { useLanguage } from '@/language';
 import { useSession } from '@/session';
 
-const LOGO_HEIGHT = 48;
-
+/** C3 phone, C4 code (resend after 30 s, wrong-code message), C5 not registered. */
 export default function LoginScreen() {
-  const { signIn } = useSession();
-  const [lang] = useLanguage();
-  const [id, setId] = useState('');
-  const [password, setPassword] = useState('');
-  const [failed, setFailed] = useState(false);
+  const { startOtp, verifyOtp } = useSession();
+  const { t, bi, lang } = useT();
+  const [step, setStep] = useState<'phone' | 'code' | 'notRegistered'>('phone');
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [resendAt, setResendAt] = useState(0);
+  const [now, setNow] = useState(Date.now);
+  const [demoCode, setDemoCode] = useState<string | null>(null);
 
-  function submit() {
-    const account = signIn(id, password);
-    if (!account) {
-      setFailed(true);
-      return;
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const digits = phone.replace(/\D/g, '').slice(-10);
+  const wait = Math.max(0, Math.ceil((resendAt - now) / 1000));
+
+  async function send() {
+    setError(null);
+    if (!/^[6-9]\d{9}$/.test(digits)) return setError(t('otp.invalidPhone'));
+    setBusy(true);
+    try {
+      const res = await startOtp(digits);
+      setResendAt(Date.now() + res.resendInSeconds * 1000);
+      setDemoCode(res.demoCode ?? null);
+      setCode('');
+      setStep('code');
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.code === 'not_registered') setStep('notRegistered');
+      else if (err.code === 'wait') {
+        setStep('code');
+        setResendAt(Date.now() + Number(err.body.retryInSeconds ?? 30) * 1000);
+      } else setError(err.offline ? t('otp.offline') : t('otp.invalidPhone'));
+    } finally {
+      setBusy(false);
     }
-    router.replace(homePath(account.role));
   }
 
-  const error = bi(lang, 'login.error');
+  async function verify() {
+    setError(null);
+    if (!/^\d{6}$/.test(code)) return setError(t('otp.wrong'));
+    setBusy(true);
+    try {
+      await verifyOtp(digits, code);
+      router.replace('/');
+    } catch (e) {
+      const err = e as ApiError;
+      setError(
+        err.offline
+          ? t('otp.offline')
+          : err.code === 'expired'
+            ? t('otp.expired')
+            : err.code === 'too_many_attempts'
+              ? t('otp.tooMany')
+              : t('otp.wrong'),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.top}>
-          <Image
-            source={require('@/assets/images/neobridge-logo.png')}
-            style={{ height: LOGO_HEIGHT, width: (LOGO_HEIGHT * 1261) / 355 }}
-            contentFit="contain"
-            accessibilityLabel="NeoBridge"
-          />
-          <LanguageSwitch />
-        </View>
+    <Screen edges={['top', 'bottom']}>
+      <View style={styles.top}>
+        <Image
+          source={require('@/assets/images/neobridge-logo.png')}
+          style={{ height: 44, width: (44 * 1261) / 355 }}
+          contentFit="contain"
+          accessibilityLabel="NeoBridge"
+        />
+        <LanguageSwitch />
+      </View>
 
-        <View style={styles.card}>
-          <Text style={styles.title}>{t(lang, 'login.title')}</Text>
-          {lang !== 'en' && <Text style={styles.muted}>{t('en', 'login.sub')}</Text>}
+      <Card>
+        <H1>{t('otp.title')}</H1>
+        {lang !== 'en' && <Muted>{bi('otp.title').gloss}</Muted>}
 
-          <FieldLabel value={bi(lang, 'login.id')} />
-          <TextInput
-            style={styles.input}
-            value={id}
-            onChangeText={setId}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="username"
-          />
+        {step === 'phone' && (
+          <>
+            <Field
+              label={t('otp.phone')}
+              value={phone}
+              onChangeText={(v) => setPhone(v.replace(/[^\d+ ]/g, ''))}
+              keyboardType="phone-pad"
+              placeholder="98765 43210"
+              hint={t('otp.phoneHint')}
+              error={error}
+              maxLength={16}
+            />
+            <Button label={bi('otp.send')} onPress={send} busy={busy} />
+          </>
+        )}
 
-          <FieldLabel value={bi(lang, 'login.password')} />
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="current-password"
-            onSubmitEditing={submit}
-          />
-
-          {failed && (
-            <Text style={styles.error}>
-              {error.text}
-              {error.gloss ? ` · ${error.gloss}` : ''}
-            </Text>
-          )}
-
-          <Pressable style={styles.submit} accessibilityRole="button" onPress={submit}>
-            <Text style={styles.submitText}>{t(lang, 'login.submit')}</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.demoTitle}>{t(lang, 'login.demoTitle')}</Text>
-          <Text style={styles.muted}>{t(lang, 'login.demoSub')}</Text>
-
-          {demoAccounts.map((a) => (
-            <View key={a.role} style={styles.account}>
-              <View style={styles.accountTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.accountWho}>{pick(lang, a.label)}</Text>
-                  <Text style={styles.muted}>{pick(lang, a.name)}</Text>
-                </View>
-                <Pressable
-                  style={styles.fill}
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setId(a.id);
-                    setPassword(a.password);
-                    setFailed(false);
-                  }}>
-                  <Text style={styles.fillText}>{t(lang, 'login.fill')}</Text>
-                </Pressable>
+        {step === 'code' && (
+          <>
+            <Body>{t('otp.codeSent', { phone: digits })}</Body>
+            {demoCode && (
+              <View style={styles.demo}>
+                <Strong>{t('otp.demoCode', { code: demoCode })}</Strong>
               </View>
-              <Text style={styles.cred}>
-                {t(lang, 'login.id')}: <Text style={styles.credValue}>{a.id}</Text>
-              </Text>
-              <Text style={styles.cred}>
-                {t(lang, 'login.password')}: <Text style={styles.credValue}>{a.password}</Text>
-              </Text>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+            )}
+            <Field
+              label={t('otp.code')}
+              value={code}
+              onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+              keyboardType="number-pad"
+              placeholder="000000"
+              error={error}
+              maxLength={6}
+              autoFocus
+            />
+            <Button label={bi('otp.verify')} onPress={verify} busy={busy} />
+            <Button
+              kind="secondary"
+              label={wait > 0 ? t('otp.resendIn', { s: wait }) : t('otp.resend')}
+              disabled={wait > 0 || busy}
+              onPress={send}
+            />
+            <Button kind="secondary" label={t('otp.changeNumber')} onPress={() => setStep('phone')} />
+          </>
+        )}
 
-function FieldLabel({ value }: { value: Bilingual }) {
-  return (
-    <Text style={styles.label}>
-      {value.text} {value.gloss && <Text style={styles.muted}>{value.gloss}</Text>}
-    </Text>
+        {step === 'notRegistered' && (
+          <>
+            <Strong style={{ color: '#a82820' }}>{t('notRegistered.title')}</Strong>
+            <Line value={bi('notRegistered.family')} />
+            <Line value={bi('notRegistered.staff')} />
+            <Button kind="secondary" label={t('otp.changeNumber')} onPress={() => setStep('phone')} />
+          </>
+        )}
+      </Card>
+
+      {step === 'phone' && (
+        <Card>
+          <Text style={styles.section}>{t('otp.demoNumbers')}</Text>
+          <Muted>{t('otp.demoSub')}</Muted>
+          {demoLogins.map((d) => (
+            <Pressable
+              key={d.phone}
+              accessibilityRole="button"
+              onPress={() => {
+                setPhone(d.phone);
+                setError(null);
+              }}
+              style={({ pressed }) => [styles.demoRow, pressed && { opacity: 0.8 }]}>
+              <View style={{ flex: 1 }}>
+                <Strong>{pick(lang, d.name)}</Strong>
+                <Muted>{pick(lang, d.role)}</Muted>
+              </View>
+              <Text style={styles.phone}>{d.phone}</Text>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.background },
-  content: { padding: size.screenGutter, gap: 16 },
-  top: {
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  section: { fontFamily: fontFamily.heading, fontSize: 20, color: color.text },
+  demo: { backgroundColor: color.actionSoft, borderRadius: radius.tile, padding: 12 },
+  demoRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  card: {
-    backgroundColor: color.surface,
-    borderRadius: radius.panel,
-    padding: 20,
-    gap: 6,
-  },
-  title: { fontFamily: fontFamily.heading, fontSize: 28, lineHeight: 38, color: color.text },
-  demoTitle: { fontFamily: fontFamily.heading, fontSize: 21, lineHeight: 28, color: color.text },
-  muted: { fontFamily: fontFamily.body, fontSize: 13, color: color.textMuted },
-  label: { marginTop: 10, fontFamily: fontFamily.bodySemiBold, fontSize: 16, color: color.text },
-  input: {
-    minHeight: 52,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: color.border,
-    borderRadius: 16,
-    backgroundColor: color.background,
-    fontFamily: fontFamily.body,
-    fontSize: 17,
-    color: color.text,
-  },
-  error: { marginTop: 6, fontFamily: fontFamily.bodySemiBold, color: '#a82820' },
-  submit: {
-    marginTop: 14,
-    minHeight: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.button,
-    backgroundColor: color.action,
-  },
-  submitText: { fontFamily: fontFamily.heading, fontSize: 20, color: color.surface },
-  account: {
-    marginTop: 8,
-    padding: 14,
+    gap: 10,
+    padding: 12,
     borderRadius: radius.tile,
-    backgroundColor: color.actionSoft,
-    gap: 2,
+    backgroundColor: color.background,
   },
-  accountTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  accountWho: { fontFamily: fontFamily.bodyBold, fontSize: 17, color: color.text },
-  fill: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    borderRadius: radius.chip,
-    borderWidth: 2,
-    borderColor: color.action,
-    backgroundColor: color.surface,
-  },
-  fillText: { fontFamily: fontFamily.bodyBold, fontSize: 14, color: color.action },
-  cred: { fontFamily: fontFamily.body, fontSize: 14, color: color.textSecondary },
-  credValue: { fontFamily: fontFamily.bodyBold, color: color.actionStrong },
+  phone: { fontFamily: fontFamily.bodyBold, fontSize: 15, color: color.action },
 });

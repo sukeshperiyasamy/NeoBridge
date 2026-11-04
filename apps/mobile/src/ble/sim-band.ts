@@ -71,7 +71,9 @@ export function createSimBand(): SimBand {
 
   const record = (r: LiveReading) => {
     log.push({
-      seq: log.length + 1,
+      // seq grows with time, so it keeps increasing across app restarts like
+      // the real band's (which persists it), and the server never sees a repeat
+      seq: Math.floor(r.timestamp / 30),
       timestamp: r.timestamp,
       skinTempC: r.skinTempC,
       roomTempC: r.roomTempC,

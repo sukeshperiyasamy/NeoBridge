@@ -2,13 +2,11 @@ import * as Network from 'expo-network';
 
 import type { SummaryRecord } from '@neobridge/ble-protocol';
 
+import { API_URL, getToken } from '@/api/client';
+
 import { createReadingStore } from './store';
 
-/**
- * Where uploads go. Set EXPO_PUBLIC_API_URL in apps/mobile/.env to the hosted
- * API; a phone on mobile data can't reach "localhost".
- */
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8787').replace(/\/$/, '');
+export { API_URL };
 
 const BATCH = 200;
 const RETRY_SECONDS = [5, 30, 120, 300];
@@ -121,10 +119,15 @@ class SyncEngine {
   private async post(bandId: string, records: SummaryRecord[]) {
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), 20_000);
+    const token = await getToken();
+    if (!token) throw new Error('not signed in');
     try {
       const res = await fetch(`${API_URL}/v1/bands/${encodeURIComponent(bandId)}/summaries`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(records),
         signal: abort.signal,
       });

@@ -262,3 +262,23 @@ export const demoClinicianSummary = {
     },
   ] satisfies DemoAlert[],
 };
+
+// ---- phone-OTP demo logins (the API's seed data, apps/api/src/seed.ts) --------
+
+export interface DemoLogin {
+  phone: string;
+  name: Text;
+  role: Text;
+}
+
+/** Shown on the app's login screen so anyone can try each dashboard. */
+export const demoLogins: readonly DemoLogin[] = [
+  { phone: "9000000011", name: { en: "Reena Kumari", hi: "रीना कुमारी" }, role: { en: "Mother", hi: "माँ" } },
+  { phone: "9000000001", name: { en: "Sunita Devi", hi: "सुनीता देवी" }, role: { en: "ASHA", hi: "आशा" } },
+  { phone: "9000000002", name: { en: "Dr. Anil Mehta", hi: "डॉ. अनिल मेहता" }, role: { en: "Neonatologist", hi: "नवजात विशेषज्ञ" } },
+  { phone: "9000000003", name: { en: "Dr. Kavya Rao", hi: "डॉ. काव्या राव" }, role: { en: "Obstetrician", hi: "प्रसूति विशेषज्ञ" } },
+  { phone: "9000000004", name: { en: "Dr. Rajesh Singh", hi: "डॉ. राजेश सिंह" }, role: { en: "Medical officer", hi: "चिकित्सा अधिकारी" } },
+];
+
+/** Free government ambulance for mothers and newborns (JSSK). */
+export const AMBULANCE = "102";

@@ -70,12 +70,17 @@ the baby so that a problem is noticed early and the right person is called.
 
 ## Features
 
+- Phone-number login with a one-time code; the role comes from the server
 - Pair the sensor over Bluetooth; the phone stays paired and reconnects by itself
-- Step-by-step troubleshooting when the sensor can't read
-- Works offline: readings are saved on the phone and uploaded when internet returns
-- Call buttons open the phone's dialer — ASHA, 102 ambulance, nearest hospital
+- Live status rules on the phone: green, yellow (warm and re-check), red, grey
+- Red fills the screen with an alarm, reaches the ASHA within a minute (in-app
+  alert, SMS from the mother's phone), and stays open until she closes it
+- KMC sessions, a daily danger-sign check, reminders, baby's day and history
+- ASHA: register mother and baby, automatic HBNC visit plan, visit form, referral, alerts
+- Doctor: dashboards by specialisation, patient list, trends, alert log, advice notes
+- Works offline: everything is saved on the phone and uploaded when internet returns
+- A demo band runs the whole flow with no hardware nearby
 - English and Hindi, switchable on every screen
-- Three roles, three dashboards: mother, ASHA worker, doctor
 
 ## How it works
 
@@ -103,7 +108,8 @@ apps/
   web/        website and dashboards
   api/        backend
 firmware/     ESP32 sensor
-packages/     shared code: Bluetooth protocol, design tokens, translations
+packages/     shared code: Bluetooth protocol, status rules, domain rules
+              (visit plan, weight gain), design tokens, translations
 assets/       logo, product photos and videos
 ```
 
@@ -126,15 +132,26 @@ cd apps/mobile
 npx expo run:android
 ```
 
-## Demo logins
+Phones need to reach the API: set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env`
+to the computer's LAN address (for example `http://192.168.1.20:8787`). The
+API seeds demo data on start and, in demo mode, shows the login code in the app
+instead of sending an SMS. `pnpm --filter @neobridge/api seed:reset` starts the
+demo again from scratch.
 
-| Role | User ID | Password |
-|---|---|---|
-| Mother | `mother.demo` | `Mother@123` |
-| ASHA worker | `asha.demo` | `Asha@123` |
-| Doctor | `doctor.demo` | `Doctor@123` |
+## Demo logins (mobile app)
 
-These are sample accounts for trying the app.
+Log in with one of these numbers; the app shows the one-time code.
+
+| Role | Phone |
+|---|---|
+| Mother (Reena, demo band) | `9000000011` |
+| ASHA (Sunita) | `9000000001` |
+| Neonatologist | `9000000002` |
+| Obstetrician | `9000000003` |
+| Medical officer | `9000000004` |
+
+The website keeps its own sample logins (`mother.demo` / `Mother@123`,
+`asha.demo` / `Asha@123`, `doctor.demo` / `Doctor@123`).
 
 ## Status
 

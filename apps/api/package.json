@@ -7,7 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "db:push": "tsx src/push-schema.ts"
+    "db:push": "tsx src/push-schema.ts",
+    "test": "tsx --test src/app.test.ts",
+    "seed:reset": "tsx src/reset.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
@@ -15,7 +17,8 @@
     "@neobridge/ble-protocol": "workspace:*",
     "hono": "^4.7.0",
     "postgres": "^3.4.5",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@neobridge/domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

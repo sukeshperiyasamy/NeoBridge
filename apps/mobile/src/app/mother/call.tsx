@@ -1,7 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { demoAshaName, demoPhone } from '@neobridge/demo';
 import { bi, t, type Bilingual } from '@neobridge/i18n';
 import { color, radius, size } from '@neobridge/tokens';
 
@@ -10,11 +9,13 @@ import { CallButton } from '@/components/call-button';
 import { CallIconButton } from '@/components/call-icon-button';
 import { fontFamily } from '@/constants/fonts';
 import { useLanguage } from '@/language';
+import { useHousehold } from '@/mother/household';
 
-// Figma: Call tab. Every button opens the dialer; calls need no internet.
+// M5 / Figma: Call tab. One tap to the ASHA, 102 and the doctor's facility; calls need no internet.
 export default function CallScreen() {
   const [lang] = useLanguage();
-  const village = { en: 'Saraiya village', hi: 'सरैया' };
+  const { mother, phones } = useHousehold();
+  const village = { en: mother?.village?.name ?? '', hi: mother?.village?.nameHi ?? '' };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -23,22 +24,26 @@ export default function CallScreen() {
         <Text style={styles.title}>{t(lang, 'call.title')}</Text>
         <Text style={styles.muted}>{t(lang, 'call.noInternet')}</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.name}>{bi(lang, 'call.asha', { name: demoAshaName }).text}</Text>
-          <Text style={styles.muted}>{t(lang, 'call.ashaRole', { village })}</Text>
-          <CallButton label={bi(lang, 'call.button')} phone={demoPhone.asha} />
-        </View>
+        {phones.asha && (
+          <View style={styles.card}>
+            <Text style={styles.name}>{bi(lang, 'call.asha', { name: phones.ashaName }).text}</Text>
+            <Text style={styles.muted}>{t(lang, 'call.ashaRole', { village })}</Text>
+            <CallButton label={bi(lang, 'call.button')} phone={phones.asha} />
+          </View>
+        )}
 
         <Row
           title={bi(lang, 'call.transport.title')}
           sub={bi(lang, 'call.transport.sub')}
-          phone={demoPhone.transport}
+          phone={phones.transport}
         />
-        <Row
-          title={bi(lang, 'call.facility.title')}
-          sub={bi(lang, 'call.facility.sub')}
-          phone={demoPhone.facility}
-        />
+        {phones.facility && (
+          <Row
+            title={phones.facilityName ? { text: phones.facilityName, gloss: null } : bi(lang, 'call.facility.title')}
+            sub={bi(lang, 'call.facility.sub')}
+            phone={phones.facility}
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );

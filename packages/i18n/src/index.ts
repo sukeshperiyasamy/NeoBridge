@@ -4,6 +4,8 @@
  * the gloss is dropped. The other Indian languages are listed for later.
  */
 
+import { appEn, appHi } from "./app";
+
 export const languages = [
   { code: "en", name: "English", english: "English" },
   { code: "hi", name: "हिन्दी", english: "Hindi" },
@@ -26,7 +28,7 @@ export const defaultLanguage: UiLanguage = "hi";
 /** A piece of text in several languages. English is always present. */
 export type Text = { en: string } & Partial<Record<LanguageCode, string>>;
 
-const en = {
+const baseEn = {
   "status.green.title": "The band sees no problem",
   "status.green.action": "Keep baby close and feed often",
   "status.yellow.title": "Baby is getting cold",
@@ -147,9 +149,11 @@ const en = {
     "This summary supports clinical judgement; it does not diagnose. Wrist skin temperature is not core temperature. All values are sample data.",
 };
 
+const en = { ...baseEn, ...appEn };
+
 export type Key = keyof typeof en;
 
-const hi: Record<Key, string> = {
+const baseHi: Record<keyof typeof baseEn, string> = {
   "status.green.title": "कोई परेशानी नहीं दिखी",
   "status.green.action": "बच्चे को पास रखें, बार-बार दूध पिलाएँ",
   "status.yellow.title": "बच्चे को ठंड लग रही है",
@@ -270,6 +274,8 @@ const hi: Record<Key, string> = {
     "यह सारांश डॉक्टर के निर्णय में मदद करता है; यह निदान नहीं करता। कलाई की त्वचा का तापमान शरीर का अंदरूनी तापमान नहीं है। सभी मान नमूना डेटा हैं।",
 };
 
+const hi: Record<Key, string> = { ...baseHi, ...appHi };
+
 const catalogs: Partial<Record<LanguageCode, Record<Key, string>>> = { en, hi };
 
 type Vars = Record<string, string | number | Text>;
@@ -307,10 +313,16 @@ export interface Bilingual {
   gloss: string | null;
 }
 
+let showGloss = true;
+/** Settings: hide the English line under Hindi text. */
+export function setShowGloss(on: boolean) {
+  showGloss = on;
+}
+
 export function bi(lang: LanguageCode, key: Key, vars?: Vars): Bilingual {
-  return { text: t(lang, key, vars), gloss: lang === "en" ? null : t("en", key, vars) };
+  return { text: t(lang, key, vars), gloss: lang === "en" || !showGloss ? null : t("en", key, vars) };
 }
 
 export function biText(lang: LanguageCode, text: Text): Bilingual {
-  return { text: pick(lang, text), gloss: lang === "en" ? null : text.en };
+  return { text: pick(lang, text), gloss: lang === "en" || !showGloss ? null : text.en };
 }

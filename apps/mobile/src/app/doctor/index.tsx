@@ -1,86 +1,98 @@
-import { Redirect } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BandStatus } from '@neobridge/ble-protocol';
-import { demoClinicianSummary as summary } from '@neobridge/demo';
-import { pick, t } from '@neobridge/i18n';
-import { color, radius, size, status as statusColor } from '@neobridge/tokens';
+import type { BabyListItem, DoctorDashboardDto } from '@neobridge/domain';
+import type { Key } from '@neobridge/i18n';
+import { color, radius, status as statusColor } from '@neobridge/tokens';
 
+import { useApi } from '@/api/cache';
 import { BrandHeader } from '@/components/brand-header';
-import { StatusShape } from '@/components/status-shape';
+import { BabyRow } from '@/components/staff';
+import { Card, H1, H2, Muted, QueryView, Screen, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
-import { useLanguage } from '@/language';
-import { useSession } from '@/session';
 
-// Same content as the web clinician summary (apps/web/src/app/doctor).
-export default function DoctorHome() {
-  const { account } = useSession();
-  const [lang] = useLanguage();
-  if (account?.role !== 'doctor') return <Redirect href="/login" />;
+const tileTone: Record<string, string> = {
+  redYellow: statusColor.red.soft,
+  kmcUnder8: statusColor.yellow.panel,
+  notGaining: statusColor.yellow.panel,
+  visitsOverdue: statusColor.grey.panel,
+  mothersInWindow: color.actionSoft,
+  greyBands: statusColor.grey.panel,
+};
+
+/**
+ * D1 newborn (neonatology, paediatrics), D2 postpartum (obstetrics, light),
+ * D3 catchment (medical officer, light). The specialisation on the server
+ * profile picks the dashboard. Red alerts nobody acknowledged in 15 minutes
+ * are flagged at the top.
+ */
+export default function DoctorDashboard() {
+  const { t } = useT();
+  const dash = useApi<DoctorDashboardDto>('/v1/dashboard', { pollMs: 30_000 });
+  const babies = useApi<{ babies: BabyListItem[] }>('/v1/babies', { pollMs: 30_000 });
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <BrandHeader />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          <Text style={styles.title}>{pick(lang, summary.title)}</Text>
-          <Text style={styles.muted}>{pick(lang, summary.details)}</Text>
-          <View style={styles.banner}>
-            <StatusShape status={BandStatus.Red} size={24} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bannerTitle}>{pick(lang, summary.banner)}</Text>
-              <Text style={styles.bannerText}>{pick(lang, summary.bannerDetail)}</Text>
-            </View>
-          </View>
-        </View>
-
-        {summary.stats.map((s) => (
-          <View key={s.label.en} style={styles.card}>
-            <Text style={styles.muted}>{pick(lang, s.label)}</Text>
-            <Text style={styles.stat}>{pick(lang, s.value)}</Text>
-            <Text style={styles.muted}>{pick(lang, s.note)}</Text>
-          </View>
-        ))}
-
-        <View style={styles.card}>
-          <Text style={styles.section}>{t(lang, 'doctor.alerts')}</Text>
-          {summary.alerts.map((a) => (
-            <View key={a.id} style={styles.alert}>
-              <StatusShape status={a.status} size={16} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.muted}>{pick(lang, a.time)}</Text>
-                <Text style={styles.body}>{pick(lang, a.text)}</Text>
+    <Screen header={<BrandHeader />}>
+      <QueryView q={dash}>
+        {(d) => {
+          const list = babies.data?.babies ?? [];
+          return (
+            <>
+              <H1>{t(`doc.dashboard.${d.kind}` as Key)}</H1>
+              {d.escalations.length > 0 && (
+                <Card tint={statusColor.red.soft}>
+                  <H2 style={{ color: statusColor.red.text }}>⚑ {t('doc.escalations')}</H2>
+                  {d.escalations.map((e) => (
+                    <Pressable
+                      key={e.episode.id}
+                      accessibilityRole="button"
+                      onPress={() => router.push({ pathname: '/baby/[id]', params: { id: e.episode.babyId } })}>
+                      <Strong>{t('doc.escalationRow', { baby: e.babyName, min: e.minutes, mother: e.motherName })}</Strong>
+                    </Pressable>
+                  ))}
+                </Card>
+              )}
+              <View style={styles.tiles}>
+                {d.tiles.map((tile) => (
+                  <Pressable
+                    key={tile.key}
+                    accessibilityRole="button"
+                    onPress={() => router.push({ pathname: '/doctor/patients', params: { tile: tile.key } })}
+                    style={({ pressed }) => [styles.tile, { backgroundColor: tileTone[tile.key] ?? color.surface }, pressed && { opacity: 0.85 }]}>
+                    <Text style={styles.count}>{tile.count}</Text>
+                    <Text style={styles.label}>{t(`doc.tile.${tile.key}` as Key)}</Text>
+                  </Pressable>
+                ))}
               </View>
-            </View>
-          ))}
-        </View>
-
-        <Text style={styles.muted}>{t(lang, 'doctor.disclaimer')}</Text>
-      </ScrollView>
-    </SafeAreaView>
+              {/* the babies behind the first tile, red first */}
+              <H2>{t(`doc.tile.${d.tiles[0]?.key ?? 'redYellow'}` as Key)}</H2>
+              {(d.tiles[0]?.babyIds ?? []).length === 0 && <Muted>{t('common.empty')}</Muted>}
+              {list
+                .filter((b) => d.tiles[0]?.babyIds.includes(b.baby.id))
+                .map((b) => (
+                  <BabyRow key={b.baby.id} item={b} showAsha onPress={() => router.push({ pathname: '/baby/[id]', params: { id: b.baby.id } })} />
+                ))}
+              <Muted>{t('settings.about')}</Muted>
+            </>
+          );
+        }}
+      </QueryView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.background, paddingHorizontal: size.screenGutter },
-  content: { gap: 12, paddingBottom: 24 },
-  card: { backgroundColor: color.surface, borderRadius: radius.card, padding: 16, gap: 6 },
-  title: { fontFamily: fontFamily.heading, fontSize: 26, lineHeight: 34, color: color.text },
-  section: { fontFamily: fontFamily.heading, fontSize: 19, lineHeight: 26, color: color.text },
-  stat: { fontFamily: fontFamily.heading, fontSize: 26, lineHeight: 34, color: color.text },
-  muted: { fontFamily: fontFamily.body, fontSize: 13, color: color.textMuted },
-  body: { fontFamily: fontFamily.body, fontSize: 15, color: color.text },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
-    padding: 12,
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tile: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    minHeight: 110,
     borderRadius: radius.tile,
-    backgroundColor: statusColor.red.soft,
+    padding: 14,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: color.border,
   },
-  bannerTitle: { fontFamily: fontFamily.bodyBold, fontSize: 16, color: statusColor.red.text },
-  bannerText: { fontFamily: fontFamily.body, fontSize: 13, color: statusColor.red.text },
-  alert: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  count: { fontFamily: fontFamily.headingHeavy, fontSize: 36, lineHeight: 44, color: color.text },
+  label: { fontFamily: fontFamily.bodySemiBold, fontSize: 15, lineHeight: 20, color: color.text },
 });
