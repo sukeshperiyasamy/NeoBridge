@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,7 +7,7 @@ import { demoAshaName, demoPhone } from '@neobridge/demo';
 import { bi, type Key } from '@neobridge/i18n';
 import { color, radius, size } from '@neobridge/tokens';
 
-import type { BandPhase } from '@/ble/band-controller';
+import type { BandPhase, BandState } from '@/ble/band-controller';
 import { useBand } from '@/ble/use-band';
 import { BrandHeader } from '@/components/brand-header';
 import { CallButton } from '@/components/call-button';
@@ -16,7 +15,18 @@ import { StatusPanel } from '@/components/status-panel';
 import { fontFamily } from '@/constants/fonts';
 import { useLanguage } from '@/language';
 
-const statuses = [BandStatus.Green, BandStatus.Yellow, BandStatus.Red, BandStatus.Grey];
+/** A status older than this is not shown as current: the family sees grey instead. */
+const STALE_MS = 5 * 60_000;
+
+/**
+ * What the family sees comes only from the band. No band, no link, or no fresh
+ * reading → grey ("the band cannot read"), never an old status dressed as new.
+ */
+function homeStatus(band: BandState): BandStatus {
+  if (band.phase !== 'connected' || !band.status || band.lastSeen === null) return BandStatus.Grey;
+  if (Date.now() - band.lastSeen > STALE_MS) return BandStatus.Grey;
+  return band.status.status;
+}
 
 const chipKey: Record<BandPhase, Key> = {
   loading: 'band.state.connecting',
@@ -28,12 +38,10 @@ const chipKey: Record<BandPhase, Key> = {
 
 export default function MotherHome() {
   const [lang] = useLanguage();
-  // Placeholder until BandClient feeds real status in. Tap the panel to
-  // preview the four states from the Figma file.
-  const [status, setStatus] = useState(BandStatus.Green);
   const [band] = useBand();
   const chip = bi(lang, chipKey[band.phase]);
   const unpaired = band.phase === 'unpaired';
+  const status = homeStatus(band);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -49,9 +57,7 @@ export default function MotherHome() {
         )}
       </Pressable>
 
-      <Pressable onPress={() => setStatus(statuses[(statuses.indexOf(status) + 1) % 4])}>
-        <StatusPanel status={status} lang={lang} />
-      </Pressable>
+      <StatusPanel status={status} lang={lang} />
 
       <View style={styles.spacer} />
 
