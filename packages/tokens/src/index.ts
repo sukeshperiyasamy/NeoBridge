@@ -1,7 +1,7 @@
 /**
  * Design tokens taken from the Figma file "Infant Band App — Key Screens".
  * The file has no Figma variables, so these values were read from the layers.
- * Action colours were then re-based on the NeoBridge logo (IMG_2791.PNG).
+ * Action colours were then re-based on the NeoBridge logo (assets/brand/neobridge-logo-original.png).
  *
  * Rules from the design:
  * - The brand purple is for actions only, never for a status.
