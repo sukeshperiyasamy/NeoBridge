@@ -1,100 +1,107 @@
-# NeoBridge
+<p align="center">
+  <img src="apps/web/public/neobridge-logo.png" alt="NeoBridge" width="360">
+</p>
 
-A wrist band (ESP32) that watches a newborn's warmth at home, plus apps for the
-family, the ASHA and the doctor. Design: Figma "Infant Band App — Key Screens".
-Logo: `IMG_2791.PNG` (icons and splash are generated from it).
+<p align="center">
+  A wrist band that keeps watch over a newborn's warmth at home,<br>
+  and tells the family, their ASHA worker and the doctor what to do next.
+</p>
 
-## Demo logins
+---
 
-Shown on the login page of both the website and the mobile app. Each opens its
-own dashboard. These are sample accounts only, with no real authentication behind
-them (`packages/demo`).
+## About
 
-| Person | ID | Password | Dashboard |
-|---|---|---|---|
-| Mother / family | `mother.demo` | `Mother@123` | `/mother` |
-| ASHA worker | `asha.demo` | `Asha@123` | `/asha` |
-| Doctor | `doctor.demo` | `Doctor@123` | `/doctor` |
+Newborns, especially small or early babies, can lose heat quickly, and a cold
+baby is one of the biggest risks in the first weeks at home. NeoBridge pairs a
+soft wrist band with simple apps so that a problem is noticed early and the
+right person is called.
 
-## Layout
+- **The band** (ESP32) reads skin temperature, room temperature, heart rate and
+  HRV, and decides the baby's status on its own — no phone or internet needed.
+- **The mother's app** shows that status as a colour, a shape and a spoken
+  sentence, and gives one clear next step. Families never see numbers.
+- **The ASHA's app** lists her babies with the ones needing help first, and
+  calls the family in one tap.
+- **The doctor's view** shows trends, alerts and data quality for a referred baby.
 
-| Path | What | Stack |
+## Four states, one next step each
+
+| | State | What the family is told |
 |---|---|---|
-| `apps/mobile` | Caregiver + ASHA app, iOS and Android | Expo SDK 58, Expo Router, react-native-ble-plx |
-| `apps/web` | Website and clinician summary (also opened in a WebView from the ASHA app) | Next.js 16 |
-| `apps/api` | Stores band uploads, trend data; alerts, SMS/push to come | Hono on Node, Postgres / Neon (`db/schema.sql`) |
-| `firmware` | Band firmware | ESP-IDF + NimBLE |
-| `packages/ble-protocol` | GATT UUIDs and packet codecs shared by apps and API | TypeScript |
-| `packages/tokens` | Colours, type, sizes from Figma | TypeScript |
-| `packages/i18n` | 8 languages + voice clip ids | TypeScript |
-| `packages/demo` | Demo logins and sample babies/alerts | TypeScript |
+| 🟢 | **Green** — no problem found | Keep baby close and feed often |
+| 🟡 | **Yellow** — warm and check | Skin to skin, cover the head, feed; the band checks again in an hour |
+| 🔴 | **Red** — get help now | Call your ASHA now; if no answer, call 102 for free transport |
+| ⚪ | **Grey** — fix the band | Fit it gently or charge it |
 
-`packages/ble-protocol/src/index.ts` and `firmware/main/band_protocol.h` define
-the same Bluetooth contract. Change them together.
+## Features
 
-## Run
+- Pair the band over Bluetooth; the phone stays paired and reconnects by itself
+- "Fix the band" step-by-step troubleshooting
+- Works offline: readings are saved on the phone and uploaded when internet returns
+- Call buttons open the phone's dialer — ASHA, 102 ambulance, nearest hospital
+- English and Hindi, switchable on every screen
+- Three roles, three dashboards: mother, ASHA worker, doctor
+
+## How it works
+
+```
+ Band (ESP32)  ──Bluetooth──▶  Phone app  ──mobile internet──▶  API  ──▶  Database
+ senses & decides              saves first,                                Postgres (Neon)
+                               uploads when online
+```
+
+## Tech stack
+
+| Part | Built with |
+|---|---|
+| Mobile app (iOS & Android) | Expo · React Native |
+| Website & doctor view | Next.js |
+| API | Node · Hono |
+| Database | Postgres (Neon) |
+| Band firmware | ESP32 · ESP-IDF · Bluetooth LE |
+
+## Project structure
+
+```
+apps/
+  mobile/     iOS & Android app
+  web/        website and dashboards
+  api/        backend
+firmware/     ESP32 band
+packages/     shared code: Bluetooth protocol, design tokens, translations
+```
+
+## Getting started
+
+Requires Node 20+ and pnpm.
 
 ```bash
 pnpm install
-pnpm dev:web        # http://localhost:3000
-pnpm dev:api        # http://localhost:8787/health
-pnpm dev:mobile     # Expo dev server
-pnpm typecheck
-pnpm test
+pnpm dev:web      # website
+pnpm dev:api      # API
+pnpm dev:mobile   # mobile app
 ```
 
-Bluetooth is a native module, so the mobile app does **not** run in Expo Go.
-Build a development client once, then use `pnpm dev:mobile`:
+The mobile app uses Bluetooth, so it needs a development build rather than
+Expo Go:
 
 ```bash
 cd apps/mobile
-npx expo run:android            # needs Android Studio, or:
-npx eas-cli@latest build --profile development --platform android
+npx expo run:android
 ```
 
-Firmware (needs ESP-IDF 5.x installed):
+## Demo logins
 
-```bash
-cd firmware
-idf.py set-target esp32
-idf.py build flash monitor
-```
+| Role | User ID | Password |
+|---|---|---|
+| Mother | `mother.demo` | `Mother@123` |
+| ASHA worker | `asha.demo` | `Asha@123` |
+| Doctor | `doctor.demo` | `Doctor@123` |
 
-## How band data reaches the database
+These are sample accounts for trying the app.
 
-```
-Band (ESP32)  ─Bluetooth─▶  Phone storage (SQLite)  ─internet─▶  API  ─▶  Postgres (Neon)
-keeps 3 days                 "waiting to upload"                  ignores
-until read                   survives offline / restarts          duplicates
-```
+## Status
 
-1. **Band → phone.** The band records one 20-byte reading a minute (skin and
-   room temperature, contact, HR, HRV, signal quality, battery) and keeps it
-   until the phone reads it. While connected, the phone reads every page since
-   the last reading it has (`apps/mobile/src/ble/band-controller.ts`).
-2. **Phone storage.** Readings are saved on the phone first and marked "not
-   uploaded" (`apps/mobile/src/sync/store.ts`).
-3. **Phone → server.** When the phone has internet it uploads waiting readings
-   in batches of 200 and marks them uploaded once the server confirms. No
-   internet or server down: they stay saved and retry after 5 s, 30 s, 2 min,
-   then every 5 min, and immediately when the network returns
-   (`apps/mobile/src/sync/sync-engine.ts`). The Band tab shows the status.
-4. **Server.** `(band, seq)` is the key, so re-sent batches never duplicate.
-   Trend data: `GET /v1/bands/:bandId/summaries?since=&until=`.
-
-**Database.** Without `DATABASE_URL` the API runs a built-in local Postgres
-(PGlite). For Neon, set `DATABASE_URL` in `apps/api/.env` and run
-`pnpm --filter @neobridge/api db:push` once to create the tables.
-
-**API address on the phone.** Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env`
-(see `.env.example`). A phone on mobile data needs the API on a public https
-address; `localhost` only works in the browser preview.
-
-## Ground rules from the design
-
-- The band decides the status (green, yellow, red, grey); the phone mirrors it.
-- Caregivers never see numbers. Every status has a shape, colour, sound and spoken line.
-- Red can never be silenced and must sound on a locked phone.
-- Everything works offline; the phone uploads summaries, not raw sensor streams.
-- Heart rate is trend only and never changes the family's status in version 1.
-- Cold/warm lines are placeholders until the calibration study.
+Early prototype. The band's temperature thresholds are placeholders until a
+calibration study against a clinical thermometer. NeoBridge supports care
+decisions; it does not diagnose.
