@@ -26,6 +26,9 @@ importers:
       '@neobridge/ble-protocol':
         specifier: workspace:*
         version: link:../../packages/ble-protocol
+      '@neobridge/demo':
+        specifier: workspace:*
+        version: link:../../packages/demo
       '@neobridge/domain':
         specifier: workspace:*
         version: link:../../packages/domain

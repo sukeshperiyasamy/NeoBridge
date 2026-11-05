@@ -3,20 +3,27 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { demoLogins } from '@neobridge/demo';
+import { demoLogins, demoPasswordLogins } from '@neobridge/demo';
 import { pick } from '@neobridge/i18n';
 import { color, radius } from '@neobridge/tokens';
 
 import { ApiError } from '@/api/client';
 import { LanguageSwitch } from '@/components/language-switch';
-import { Body, Button, Card, Field, H1, Line, Muted, Screen, Strong, useT } from '@/components/ui';
+import { Body, Button, Card, Choice, Field, H1, Line, Muted, Screen, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
 import { useSession } from '@/session';
 
-/** C3 phone, C4 code (resend after 30 s, wrong-code message), C5 not registered. */
+/**
+ * C3 phone, C4 code (resend after 30 s, wrong-code message), C5 not registered.
+ * DEMO ONLY: a user ID + password mode for the seeded accounts, kept until the
+ * full integration is done (API: DEMO_LOGIN).
+ */
 export default function LoginScreen() {
-  const { startOtp, verifyOtp } = useSession();
+  const { startOtp, verifyOtp, signInWithPassword } = useSession();
   const { t, bi, lang } = useT();
+  const [mode, setMode] = useState<'password' | 'phone'>('password');
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
   const [step, setStep] = useState<'phone' | 'code' | 'notRegistered'>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -32,6 +39,7 @@ export default function LoginScreen() {
   }, []);
 
   const digits = phone.replace(/\D/g, '').slice(-10);
+  const titleKey = step === 'phone' && mode === 'password' ? 'login.title' : 'otp.title';
   const wait = Math.max(0, Math.ceil((resendAt - now) / 1000));
 
   async function send() {
@@ -51,6 +59,20 @@ export default function LoginScreen() {
         setStep('code');
         setResendAt(Date.now() + Number(err.body.retryInSeconds ?? 30) * 1000);
       } else setError(err.offline ? t('otp.offline') : t('otp.invalidPhone'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function passwordLogin() {
+    setError(null);
+    if (!userId.trim() || !password) return setError(t('login.error'));
+    setBusy(true);
+    try {
+      await signInWithPassword(userId.trim(), password);
+      router.replace('/');
+    } catch (e) {
+      setError((e as ApiError).offline ? t('otp.offline') : t('login.error'));
     } finally {
       setBusy(false);
     }
@@ -92,10 +114,33 @@ export default function LoginScreen() {
       </View>
 
       <Card>
-        <H1>{t('otp.title')}</H1>
-        {lang !== 'en' && <Muted>{bi('otp.title').gloss}</Muted>}
+        <H1>{t(titleKey)}</H1>
+        {lang !== 'en' && <Muted>{bi(titleKey).gloss}</Muted>}
 
         {step === 'phone' && (
+          <Choice
+            options={[
+              { value: 'password', label: t('otp.usePassword') },
+              { value: 'phone', label: t('otp.usePhone') },
+            ]}
+            value={mode}
+            onChange={(m) => {
+              setMode(m);
+              setError(null);
+            }}
+          />
+        )}
+
+        {step === 'phone' && mode === 'password' && (
+          <>
+            <Field label={t('login.id')} value={userId} onChangeText={setUserId} placeholder="asha.demo" />
+            <Field label={t('login.password')} value={password} onChangeText={setPassword} secure error={error} />
+            <Button label={bi('login.submit')} onPress={passwordLogin} busy={busy} />
+            <Muted>{t('otp.passwordNote')}</Muted>
+          </>
+        )}
+
+        {step === 'phone' && mode === 'phone' && (
           <>
             <Field
               label={t('otp.phone')}
@@ -150,7 +195,34 @@ export default function LoginScreen() {
         )}
       </Card>
 
-      {step === 'phone' && (
+      {step === 'phone' && mode === 'password' && (
+        <Card>
+          <Text style={styles.section}>{t('login.demoTitle')}</Text>
+          <Muted>{t('otp.demoPasswordSub')}</Muted>
+          {demoPasswordLogins.map((d) => (
+            <Pressable
+              key={d.id}
+              accessibilityRole="button"
+              onPress={() => {
+                setUserId(d.id);
+                setPassword(d.password);
+                setError(null);
+              }}
+              style={({ pressed }) => [styles.demoRow, pressed && { opacity: 0.8 }]}>
+              <View style={{ flex: 1 }}>
+                <Strong>{pick(lang, d.name)}</Strong>
+                <Muted>{pick(lang, d.role)}</Muted>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.phone}>{d.id}</Text>
+                <Muted>{d.password}</Muted>
+              </View>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+
+      {step === 'phone' && mode === 'phone' && (
         <Card>
           <Text style={styles.section}>{t('otp.demoNumbers')}</Text>
           <Muted>{t('otp.demoSub')}</Muted>

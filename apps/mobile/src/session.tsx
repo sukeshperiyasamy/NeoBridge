@@ -27,6 +27,8 @@ interface Session {
   startOtp(phone: string): Promise<{ resendInSeconds: number; demoCode?: string }>;
   /** Step 2: check the code and sign in. */
   verifyOtp(phone: string, code: string): Promise<Me>;
+  /** DEMO ONLY: user ID + password for the seeded accounts. Remove after full integration. */
+  signInWithPassword(id: string, password: string): Promise<Me>;
   /** Re-read the profile (after consent, band assignment…). */
   refresh(): Promise<void>;
   signOut(): Promise<void>;
@@ -77,6 +79,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return onUnauthorised(() => void signOut());
   }, [refresh, signOut]);
 
+  /** Stores the new session, loads the full profile and opens the role's home. */
+  const finish = useCallback(
+    async (res: { token: string; profile: UserProfile }): Promise<Me> => {
+      await setToken(res.token);
+      const full = await api<Me>('GET', '/v1/me').catch(() => ({ profile: res.profile }) as Me);
+      await store(full);
+      setLang(full.profile.language);
+      setStatus('signedIn');
+      return full;
+    },
+    [store, setLang],
+  );
+
   const value = useMemo<Session>(
     () => ({
       status,
@@ -84,19 +99,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       async startOtp(phone) {
         return api<{ resendInSeconds: number; demoCode?: string }>('POST', '/v1/auth/otp/start', { phone });
       },
+      async signInWithPassword(id, password) {
+        return finish(await api<{ token: string; profile: UserProfile }>('POST', '/v1/auth/password', { id, password }));
+      },
       async verifyOtp(phone, code) {
-        const res = await api<{ token: string; profile: UserProfile }>('POST', '/v1/auth/otp/verify', { phone, code });
-        await setToken(res.token);
-        const full = await api<Me>('GET', '/v1/me').catch(() => ({ profile: res.profile }) as Me);
-        await store(full);
-        setLang(full.profile.language);
-        setStatus('signedIn');
-        return full;
+        return finish(await api<{ token: string; profile: UserProfile }>('POST', '/v1/auth/otp/verify', { phone, code }));
       },
       refresh,
       signOut,
     }),
-    [status, me, refresh, signOut, store, setLang],
+    [status, me, refresh, signOut, finish],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

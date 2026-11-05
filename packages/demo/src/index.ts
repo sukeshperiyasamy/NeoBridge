@@ -282,3 +282,32 @@ export const demoLogins: readonly DemoLogin[] = [
 
 /** Free government ambulance for mothers and newborns (JSSK). */
 export const AMBULANCE = "102";
+
+// ---- user ID + password demo logins (app and API) ------------------------------
+
+/**
+ * DEMO ONLY, until the full integration is done: user ID + password logins
+ * for the seeded accounts. The API accepts them only while DEMO_LOGIN is not
+ * "0"; each maps to a seeded phone number, so the session is the same as OTP.
+ */
+export interface DemoPasswordLogin {
+  id: string;
+  password: string;
+  phone: string;
+  name: Text;
+  role: Text;
+}
+
+export const demoPasswordLogins: readonly DemoPasswordLogin[] = [
+  { id: "mother.demo", password: "Mother@123", phone: "9000000011", name: { en: "Reena Kumari", hi: "रीना कुमारी" }, role: { en: "Mother", hi: "माँ" } },
+  { id: "asha.demo", password: "Asha@123", phone: "9000000001", name: { en: "Sunita Devi", hi: "सुनीता देवी" }, role: { en: "ASHA", hi: "आशा" } },
+  { id: "doctor.demo", password: "Doctor@123", phone: "9000000002", name: { en: "Dr. Anil Mehta", hi: "डॉ. अनिल मेहता" }, role: { en: "Neonatologist", hi: "नवजात विशेषज्ञ" } },
+  { id: "obstetrician.demo", password: "Obs@123", phone: "9000000003", name: { en: "Dr. Kavya Rao", hi: "डॉ. काव्या राव" }, role: { en: "Obstetrician", hi: "प्रसूति विशेषज्ञ" } },
+  { id: "mo.demo", password: "Mo@123", phone: "9000000004", name: { en: "Dr. Rajesh Singh", hi: "डॉ. राजेश सिंह" }, role: { en: "Medical officer", hi: "चिकित्सा अधिकारी" } },
+];
+
+/** The seeded phone for a demo user ID + password, or null. */
+export function demoPasswordPhone(id: string, password: string): string | null {
+  const login = demoPasswordLogins.find((l) => l.id === id.trim().toLowerCase());
+  return login && login.password === password ? login.phone : null;
+}

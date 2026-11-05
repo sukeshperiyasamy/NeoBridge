@@ -12,7 +12,7 @@ const db = await openDb({ memory: true });
 await seed(db);
 const sent: { phone: string; body: string }[] = [];
 let clock = Date.now();
-const app = createApp(db, { demoOtp: true, onSms: (phone, body) => sent.push({ phone, body }), now: () => clock });
+const app = createApp(db, { demoOtp: true, demoLogin: true, onSms: (phone, body) => sent.push({ phone, body }), now: () => clock });
 
 async function call<T = any>(method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; json: T }> {
   const res = await app.request(path, {
@@ -268,4 +268,23 @@ test("KMC and danger checks from the family", async () => {
   const detail = await call<BabyDetail>("GET", `/v1/babies/${babyId}`, undefined, ashaToken);
   assert.equal(detail.json.kmcByDay.at(-1)!.hours > 0 || detail.json.kmcByDay.at(-2)!.hours > 0, true);
   assert.equal(detail.json.dangerChecks[0].anyYes, true);
+});
+
+test("demo user ID + password login gives a normal session; wrong password and switched-off are refused", async () => {
+  const ok = await call("POST", "/v1/auth/password", { id: "ASHA.demo", password: "Asha@123" });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.profile.role, "asha");
+  const me = await call("GET", "/v1/me", undefined, ok.json.token);
+  assert.equal(me.json.profile.name, "Sunita Devi");
+
+  const wrong = await call("POST", "/v1/auth/password", { id: "asha.demo", password: "nope" });
+  assert.equal(wrong.json.error, "wrong_password");
+
+  const off = createApp(db, { demoOtp: true });
+  const res = await off.request("/v1/auth/password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: "asha.demo", password: "Asha@123" }),
+  });
+  assert.equal(res.status, 404);
 });

@@ -12,7 +12,9 @@ if (process.env.SEED !== "0" && (await seedIfEmpty(db))) {
 const port = Number(process.env.PORT ?? 8787);
 // Demo: OTP codes are returned to the app (and logged) until the SMS gateway (P1).
 const demoOtp = process.env.OTP_DEMO !== "0";
+// Demo: user ID + password logins for the seeded accounts. Set DEMO_LOGIN=0 to turn off.
+const demoLogin = process.env.DEMO_LOGIN !== "0";
 
-serve({ fetch: createApp(db, { demoOtp }).fetch, port, hostname: process.env.HOST ?? "0.0.0.0" }, () => {
-  console.log(`api listening on http://localhost:${port} · db: ${db.label} · demo OTP ${demoOtp ? "on" : "off"}`);
+serve({ fetch: createApp(db, { demoOtp, demoLogin }).fetch, port, hostname: process.env.HOST ?? "0.0.0.0" }, () => {
+  console.log(`api listening on http://localhost:${port} · db: ${db.label} · demo OTP ${demoOtp ? "on" : "off"} · demo password login ${demoLogin ? "on" : "off"}`);
 });

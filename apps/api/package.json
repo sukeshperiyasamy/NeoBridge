@@ -18,7 +18,8 @@
     "hono": "^4.7.0",
     "postgres": "^3.4.5",
     "zod": "^3.24.0",
-    "@neobridge/domain": "workspace:*"
+    "@neobridge/domain": "workspace:*",
+    "@neobridge/demo": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

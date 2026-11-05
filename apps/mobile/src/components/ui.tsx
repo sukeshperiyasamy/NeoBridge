@@ -250,6 +250,7 @@ export function Field({
   placeholder,
   maxLength,
   autoFocus,
+  secure,
 }: {
   label: string;
   value: string;
@@ -261,6 +262,7 @@ export function Field({
   placeholder?: string;
   maxLength?: number;
   autoFocus?: boolean;
+  secure?: boolean;
 }) {
   return (
     <View style={{ gap: 4 }}>
@@ -274,6 +276,9 @@ export function Field({
         placeholderTextColor={color.textMuted}
         maxLength={maxLength}
         autoFocus={autoFocus}
+        secureTextEntry={secure}
+        autoCapitalize={secure || keyboardType ? 'none' : undefined}
+        autoCorrect={secure ? false : undefined}
         style={[s.input, multiline && { minHeight: 90, textAlignVertical: 'top' }, error ? { borderColor: statusColor.red.fill } : null]}
       />
       {error ? <Text style={s.error}>{error}</Text> : hint ? <Text style={s.muted}>{hint}</Text> : null}

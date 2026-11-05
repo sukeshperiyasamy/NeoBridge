@@ -140,7 +140,18 @@ demo again from scratch.
 
 ## Demo logins (mobile app)
 
-Log in with one of these numbers; the app shows the one-time code.
+For the demo the app also accepts a user ID and password (until the full
+integration; set `DEMO_LOGIN=0` on the API to turn it off):
+
+| Role | User ID | Password |
+|---|---|---|
+| Mother | `mother.demo` | `Mother@123` |
+| ASHA | `asha.demo` | `Asha@123` |
+| Neonatologist | `doctor.demo` | `Doctor@123` |
+| Obstetrician | `obstetrician.demo` | `Obs@123` |
+| Medical officer | `mo.demo` | `Mo@123` |
+
+Or log in with one of these numbers; the app shows the one-time code.
 
 | Role | Phone |
 |---|---|

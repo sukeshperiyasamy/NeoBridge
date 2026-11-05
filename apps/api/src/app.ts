@@ -5,6 +5,7 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 
 import { BandStatus } from "@neobridge/ble-protocol";
+import { demoPasswordPhone } from "@neobridge/demo";
 import {
   ESCALATE_AFTER_MS,
   KMC_TARGET_HOURS,
@@ -46,6 +47,8 @@ import type { Db } from "./db.ts";
 export interface AppOptions {
   /** Return the OTP in the response so the demo works without an SMS gateway. */
   demoOtp?: boolean;
+  /** Accept the demo user ID + password logins (packages/demo). Remove after full integration. */
+  demoLogin?: boolean;
   /** Called for every message the server would send by SMS. */
   onSms?: (phone: string, body: string) => void;
   now?: () => number;
@@ -153,9 +156,22 @@ export function createApp(db: Db, opts: AppOptions = {}) {
     return c.json({ token, profile: await profile(db, user!) });
   });
 
+  /** DEMO ONLY: user ID + password for the seeded accounts, same session as OTP. */
+  app.post("/v1/auth/password", async (c) => {
+    if (!opts.demoLogin) return bad(c, "not_found", 404);
+    const body = await parse(c, z.object({ id: z.string().max(60), password: z.string().max(60) }));
+    const phone = body ? demoPasswordPhone(body.id, body.password) : null;
+    if (!phone) return bad(c, "wrong_password");
+    const [u] = await db.query<Row>("select id from users where phone = $1", [phone]);
+    if (!u) return bad(c, "not_registered", 404);
+    const token = randomBytes(24).toString("base64url");
+    await db.query("insert into sessions (token, user_id) values ($1, $2)", [token, u.id]);
+    return c.json({ token, profile: await profile(db, (await loadUser(db, String(u.id)))!) });
+  });
+
   // everything else needs a session
   app.use("/v1/*", async (c, next) => {
-    if (c.req.path.startsWith("/v1/auth/otp/")) return next();
+    if (c.req.path.startsWith("/v1/auth/otp/") || c.req.path === "/v1/auth/password") return next();
     const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
     if (!token) return c.json({ error: "unauthorised" }, 401);
     const [s] = await db.query<Row>("select user_id from sessions where token = $1", [token]);
