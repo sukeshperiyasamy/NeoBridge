@@ -6,6 +6,7 @@ import { ago, bi, t, type Bilingual, type Key, type UiLanguage } from '@neobridg
 import { color, radius, size, status as statusColor } from '@neobridge/tokens';
 
 import {
+  DEMO_BAND_ALLOWED,
   LOW_BATTERY,
   checkOrder,
   type BandPhase,
@@ -56,7 +57,7 @@ export default function BandScreen() {
           <PairCard band={band} lang={lang} onScan={() => controller.startScan()} onPair={(b) => controller.pair(b)} />
         )}
 
-        {!paired && (
+        {!paired && DEMO_BAND_ALLOWED && (
           <View style={styles.card}>
             <Line value={bi(lang, 'band.useDemoHint')} style={styles.body} />
             <SecondaryButton label={t(lang, 'band.useDemo')} onPress={() => void controller.useDemoBand()} />

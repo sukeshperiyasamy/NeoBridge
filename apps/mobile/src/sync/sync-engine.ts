@@ -2,11 +2,9 @@ import * as Network from 'expo-network';
 
 import type { SummaryRecord } from '@neobridge/ble-protocol';
 
-import { API_URL, getToken } from '@/api/client';
+import { getApiUrl, getToken } from '@/api/client';
 
 import { createReadingStore } from './store';
-
-export { API_URL };
 
 const BATCH = 200;
 const RETRY_SECONDS = [5, 30, 120, 300];
@@ -122,7 +120,7 @@ class SyncEngine {
     const token = await getToken();
     if (!token) throw new Error('not signed in');
     try {
-      const res = await fetch(`${API_URL}/v1/bands/${encodeURIComponent(bandId)}/summaries`, {
+      const res = await fetch(`${await getApiUrl()}/v1/bands/${encodeURIComponent(bandId)}/summaries`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',

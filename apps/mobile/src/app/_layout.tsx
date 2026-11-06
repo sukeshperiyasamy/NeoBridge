@@ -10,6 +10,7 @@ import { color } from '@neobridge/tokens';
 
 import { setOnFetched } from '@/api/cache';
 import { getOutbox } from '@/api/outbox';
+import { LogoSplash } from '@/components/logo-splash';
 import { LanguageProvider } from '@/language';
 import { setupNotifications } from '@/notify';
 import { SessionProvider } from '@/session';
@@ -41,6 +42,7 @@ export default function RootLayout() {
       <SessionProvider>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.background } }} />
+        <LogoSplash />
       </SessionProvider>
     </LanguageProvider>
   );

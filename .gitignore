@@ -21,3 +21,6 @@ firmware/managed_components/
 
 # local API database
 apps/api/.data/
+
+# Gradle output of local Expo modules
+apps/mobile/modules/*/android/build/

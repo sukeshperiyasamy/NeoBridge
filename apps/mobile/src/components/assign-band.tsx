@@ -5,7 +5,7 @@ import { color } from '@neobridge/tokens';
 
 import { invalidate } from '@/api/cache';
 import { ApiError, api } from '@/api/client';
-import { getBandController } from '@/ble/band-controller';
+import { DEMO_BAND_ALLOWED, getBandController } from '@/ble/band-controller';
 import { SIM_BAND } from '@/ble/sim-band';
 import { useBand } from '@/ble/use-band';
 import { Button, Card, Field, H2, Muted, Row, Strong, useT } from '@/components/ui';
@@ -48,7 +48,7 @@ export function AssignBand({ babyId, onDone, onLater }: { babyId: string; onDone
           </Muted>
         </Pressable>
       ))}
-      <Button label={bi('reg.bandUseDemo')} onPress={() => void assign(SIM_BAND.id)} busy={busy} />
+      {DEMO_BAND_ALLOWED && <Button label={bi('reg.bandUseDemo')} onPress={() => void assign(SIM_BAND.id)} busy={busy} />}
       <Field label={t('reg.bandSerial')} value={serial} onChangeText={setSerial} />
       {serial.trim().length >= 3 && <Button kind="secondary" label={t('reg.bandAssign')} onPress={() => void assign(serial.trim())} busy={busy} />}
       {error && <Muted style={{ color: '#a82820' }}>{error}</Muted>}

@@ -1,10 +1,36 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
- * Where the API lives. Set EXPO_PUBLIC_API_URL in apps/mobile/.env; a phone on
- * mobile data can't reach "localhost", so a demo APK needs the LAN or a public URL.
+ * Where the API lives. The build default comes from EXPO_PUBLIC_API_URL in
+ * apps/mobile/.env; a phone on mobile data can't reach "localhost", so a test
+ * APK needs the LAN or a public URL. Testers can change it on the login screen
+ * (Server address), which is kept on the phone, so a newly hosted server needs
+ * no rebuild.
  */
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8787').replace(/\/$/, '');
+export const DEFAULT_API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8787').replace(/\/$/, '');
+const API_URL_KEY = 'neobridge.apiUrl';
+let apiUrl = DEFAULT_API_URL;
+const apiUrlLoaded = AsyncStorage.getItem(API_URL_KEY)
+  .then((saved) => {
+    if (saved) apiUrl = saved;
+  })
+  .catch(() => undefined);
+
+/** The server the app talks to now. */
+export async function getApiUrl(): Promise<string> {
+  await apiUrlLoaded;
+  return apiUrl;
+}
+
+/** Points the app at another server (null: back to the build default). */
+export async function setApiUrl(url: string | null): Promise<string> {
+  await apiUrlLoaded;
+  const clean = url?.trim().replace(/\/$/, '') || null;
+  apiUrl = clean ?? DEFAULT_API_URL;
+  if (clean) await AsyncStorage.setItem(API_URL_KEY, clean).catch(() => undefined);
+  else await AsyncStorage.removeItem(API_URL_KEY).catch(() => undefined);
+  return apiUrl;
+}
 
 const TOKEN_KEY = 'neobridge.token';
 let token: string | null = null;
@@ -52,7 +78,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   const t = await getToken();
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetch(`${await getApiUrl()}${path}`, {
       method,
       headers: {
         'content-type': 'application/json',

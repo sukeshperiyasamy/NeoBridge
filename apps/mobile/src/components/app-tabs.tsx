@@ -7,12 +7,8 @@ import { useLanguage } from '@/language';
 
 import type { TabDef } from './tab-defs';
 
-const icons = {
-  home: require('@/assets/images/tabIcons/home.png'),
-  explore: require('@/assets/images/tabIcons/explore.png'),
-};
-
-// Tab icons are placeholders until the Figma pictograms are exported.
+// Material Symbols on Android, SF Symbols on iOS, until the Figma pictograms
+// are exported.
 export default function AppTabs({ tabs }: { tabs: TabDef[] }) {
   const [lang] = useLanguage();
 
@@ -24,7 +20,7 @@ export default function AppTabs({ tabs }: { tabs: TabDef[] }) {
       {tabs.map((tab) => (
         <NativeTabs.Trigger key={tab.name} name={tab.name}>
           <NativeTabs.Trigger.Label>{t(lang, tab.label)}</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon src={icons[tab.icon]} renderingMode="template" />
+          <NativeTabs.Trigger.Icon md={tab.icon.md} sf={tab.icon.sf} />
         </NativeTabs.Trigger>
       ))}
     </NativeTabs>

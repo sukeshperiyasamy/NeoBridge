@@ -5,7 +5,7 @@ import { ago } from '@neobridge/i18n';
 
 import { useStore } from '@/api/cache';
 import { getOutbox } from '@/api/outbox';
-import { getBandController } from '@/ble/band-controller';
+import { DEMO_BAND_ALLOWED, getBandController } from '@/ble/band-controller';
 import { useBand } from '@/ble/use-band';
 import { LanguageSwitch } from '@/components/language-switch';
 import { Body, Button, Card, H1, H2, Muted, Row, Screen, Strong, Toggle, useT } from '@/components/ui';
@@ -64,7 +64,7 @@ export default function SettingsScreen({ embedded }: { embedded?: boolean }) {
         {lang === 'hi' && (
           <Toggle label={t('settings.showEnglish')} value={settings.showEnglish} onChange={(showEnglish) => update({ showEnglish })} />
         )}
-        {p?.role === 'mother' && (
+        {p?.role === 'mother' && DEMO_BAND_ALLOWED && (
           <Toggle label={t('settings.demo')} value={band.demoMode} onChange={(on) => void getBandController().setDemoMode(on)} />
         )}
       </Card>
@@ -86,6 +86,9 @@ export default function SettingsScreen({ embedded }: { embedded?: boolean }) {
         </Muted>
         {items.length > 0 && <Button kind="secondary" label={t('settings.retry')} onPress={() => getOutbox().retryNow()} />}
       </Card>
+
+      {/* Hardware bring-up for the ESP32 serial band; technician only, English. */}
+      <Button kind="secondary" label="Band test (ESP32)" onPress={() => router.push('/band-test')} />
 
       <Card>
         <Muted>{t('splash.version', { v: Constants.expoConfig?.version ?? '1.0.0' })} · rules 2026.11-demo</Muted>

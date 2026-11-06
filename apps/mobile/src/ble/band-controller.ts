@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { BandStatus, ReadingFlag, type LiveReading, type StatusPacket } from '@neobridge/ble-protocol';
 import {
@@ -19,10 +19,17 @@ import {
 import { getSyncEngine } from '@/sync/sync-engine';
 
 import { createBandClient } from './band-client';
+import { combineTransports, getSerialBand } from './serial-band';
 import { SIM_BAND, createSimBand, type SimBand, type SimScenario } from './sim-band';
 import type { BandTransport, FoundBand } from './types';
 
 export type BandPhase = 'loading' | 'unpaired' | 'connecting' | 'connected' | 'reconnecting';
+
+/**
+ * The demo band (a simulated band) exists only in the browser, which has no
+ * Bluetooth. On a phone the app talks to real bands only.
+ */
+export const DEMO_BAND_ALLOWED = Platform.OS === 'web';
 
 export type CheckKey = 'bluetooth' | 'permission' | 'nearby' | 'connect' | 'battery' | 'contact';
 export type CheckResult = 'pending' | 'checking' | 'pass' | 'fail' | 'skipped';
@@ -62,6 +69,10 @@ export interface BandState {
   demoMode: boolean;
   /** the scenario the demo band is acting out */
   scenario: SimScenario;
+  /** why the last connection attempt failed, for the band screens */
+  lastError: string | null;
+  /** when the next automatic retry runs, ms */
+  retryAt: number | null;
 }
 
 const rulesToBand: Record<Status, BandStatus> = {
@@ -79,7 +90,7 @@ export function bandStatusOf(status: Status): BandStatus {
 const STORAGE_KEY = 'neobridge.pairedBand';
 const RULES_KEY = 'neobridge.rulesState';
 const DEMO_KEY = 'neobridge.demoMode';
-const RETRY_SECONDS = [3, 10, 30, 60];
+const RETRY_SECONDS = [2, 5, 10, 20, 30];
 export const LOW_BATTERY = 20;
 const GOOD_CONTACT = 60;
 /** How often to pull saved readings off the band while connected. */
@@ -103,12 +114,13 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  * reconnect with backoff), live readings, the status rules and the
  * troubleshooting checks. Lives outside React; screens read it through useBand().
  *
- * Two transports: the real Bluetooth client and a demo band (PRD #5). The demo
+ * Two transports: the real bands (BLE, or the Classic serial sketch) and a demo band (PRD #5). The demo
  * band is used when it is the paired one; in the browser it is the only one.
  */
 class BandController {
   private sim: SimBand = createSimBand();
-  private real: BandTransport = Platform.OS === 'web' ? this.sim : createBandClient();
+  /** NeoBridge BLE bands and the Classic serial ESP32 sketch, scanned and driven together. */
+  private real: BandTransport = Platform.OS === 'web' ? this.sim : combineTransports(createBandClient(), getSerialBand());
   private listeners = new Set<() => void>();
   private linkSubs: (() => void)[] = [];
   private stopScan: (() => void) | null = null;
@@ -117,8 +129,8 @@ class BandController {
   private collecting = false;
   private readings: LiveReading[] = [];
   private rulesState: RulesState = initialRules;
-  /** last status sent to the band, so only changes are sent */
-  private toldBand: BandStatus | null = null;
+  /** last status sent to the band (and whether it was silenced), so only changes are sent */
+  private toldBand: string | null = null;
   private dangerSignAt: number | null = null;
   private calibrationC = 0;
 
@@ -138,11 +150,20 @@ class BandController {
     yellowStartedAt: null,
     demoMode: false,
     scenario: 'normal',
+    lastError: null,
+    retryAt: null,
   };
+  /** a connect() in flight, so taps and retries never open two links at once */
+  private connecting: Promise<void> | null = null;
 
   constructor() {
     void this.restore();
     setInterval(() => this.runRules(), EVALUATE_MS);
+    // Phones pause apps in the background (MIUI hibernates them). Coming back,
+    // check the link and reconnect at once instead of waiting for the backoff.
+    AppState.addEventListener('change', (next) => {
+      if (next === 'active') void this.checkLink();
+    });
   }
 
   getState = (): BandState => this.state;
@@ -158,11 +179,11 @@ class BandController {
   }
 
   private get transport(): BandTransport {
-    return this.state.paired?.id === SIM_BAND.id ? this.sim : this.real;
+    return this.isDemoBand() ? this.sim : this.real;
   }
 
   isDemoBand(): boolean {
-    return this.state.paired?.id === SIM_BAND.id;
+    return DEMO_BAND_ALLOWED && this.state.paired?.id === SIM_BAND.id;
   }
 
   private async restore() {
@@ -172,10 +193,16 @@ class BandController {
       AsyncStorage.getItem(DEMO_KEY).catch(() => null),
     ]);
     if (rules) this.rulesState = { ...initialRules, ...(JSON.parse(rules) as RulesState) };
-    this.set({ demoMode: demo === '1' });
+    this.set({ demoMode: DEMO_BAND_ALLOWED && demo === '1' });
     this.runRules();
-    if (!saved) return this.set({ phase: 'unpaired' });
-    this.set({ paired: JSON.parse(saved) as FoundBand, phase: 'connecting' });
+    const band = saved ? (JSON.parse(saved) as FoundBand) : null;
+    // a demo band paired by an older build: drop it, so the real band can be paired
+    if (band && band.id === SIM_BAND.id && !DEMO_BAND_ALLOWED) {
+      await AsyncStorage.removeItem(STORAGE_KEY).catch(() => undefined);
+      return this.set({ phase: 'unpaired' });
+    }
+    if (!band) return this.set({ phase: 'unpaired' });
+    this.set({ paired: band, phase: 'connecting' });
     void this.connect();
   }
 
@@ -201,15 +228,21 @@ class BandController {
 
   async pair(band: FoundBand) {
     this.stopScan?.();
+    const old = this.state.paired;
+    if (old && old.id !== band.id) {
+      this.clearLink();
+      await this.transport.disconnect(old.id).catch(() => undefined);
+    }
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(band)).catch(() => undefined);
     this.readings = [];
-    this.set({ paired: band, phase: 'connecting', found: [], checks: null, lastReading: null });
+    this.set({ paired: band, phase: 'connecting', found: [], checks: null, lastReading: null, lastError: null });
     this.attempt = 0;
     void this.connect();
   }
 
-  /** Pair the built-in demo band, for a demo with no band nearby. Turns demo timings on. */
+  /** Pair the built-in demo band (browser only, where there is no Bluetooth). Turns demo timings on. */
   async useDemoBand() {
+    if (!DEMO_BAND_ALLOWED) return;
     await this.pair({ ...SIM_BAND });
     if (!this.state.demoMode) await this.setDemoMode(true);
   }
@@ -217,13 +250,20 @@ class BandController {
   async forget() {
     const id = this.state.paired?.id;
     const transport = this.transport;
+    this.stopScan?.();
     this.clearLink();
-    if (id) await transport.disconnect(id);
+    this.attempt = 0;
+    // forget first, so a connect still in flight sees the band is gone
+    this.set({ paired: null, phase: 'unpaired' });
     await AsyncStorage.removeItem(STORAGE_KEY).catch(() => undefined);
+    if (id) await transport.disconnect(id).catch(() => undefined);
     this.readings = [];
     this.set({
       paired: null,
       phase: 'unpaired',
+      lastError: null,
+      retryAt: null,
+      found: [],
       status: null,
       battery: null,
       lastSeen: null,
@@ -236,6 +276,7 @@ class BandController {
   // ---- demo --------------------------------------------------------------
 
   async setDemoMode(on: boolean) {
+    if (on && !DEMO_BAND_ALLOWED) return;
     await AsyncStorage.setItem(DEMO_KEY, on ? '1' : '0').catch(() => undefined);
     this.set({ demoMode: on });
     this.runRules();
@@ -286,8 +327,7 @@ class BandController {
     this.rulesState = acknowledge(this.rulesState, Date.now());
     this.saveRules();
     this.set({ episode: this.rulesState.episode });
-    const id = this.state.paired?.id;
-    if (id && this.state.phase === 'connected') await this.transport.ackRed(id).catch(() => undefined);
+    this.runRules(); // sends the silenced red to the band
   }
 
   /** The ASHA or a doctor closes the red episode after a visit or a phone check. */
@@ -341,14 +381,22 @@ class BandController {
     void this.tellBand(bandStatusOf(result.status));
   }
 
-  /** The band plays the phone's status pattern (buzz, light). Only changes are sent. */
+  /**
+   * The band plays the phone's status pattern (buzz, light). Only changes are
+   * sent. A red that someone acknowledged stays silent, also after a reconnect.
+   */
   private async tellBand(status: BandStatus) {
     const id = this.state.paired?.id;
-    if (!id || this.state.phase !== 'connected' || this.toldBand === status) return;
-    this.toldBand = status;
-    await this.transport.setStatus(id, status).catch(() => {
+    const silenced = status === BandStatus.Red && !!this.rulesState.episode?.acknowledgedAt;
+    const key = `${status}${silenced ? ':silenced' : ''}`;
+    if (!id || this.state.phase !== 'connected' || this.toldBand === key) return;
+    this.toldBand = key;
+    try {
+      await this.transport.setStatus(id, status, silenced);
+      if (silenced) await this.transport.ackRed(id);
+    } catch {
       this.toldBand = null; // try again on the next evaluation
-    });
+    }
   }
 
   private saveRules() {
@@ -365,16 +413,27 @@ class BandController {
     this.toldBand = null;
   }
 
-  private async connect() {
+  private connect(): Promise<void> {
+    this.connecting ??= this.openLink().finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+
+  private async openLink() {
     const band = this.state.paired;
     if (!band) return;
     this.clearLink();
     const transport = this.transport;
     try {
-      await transport.connect(band.id);
-      if (this.state.paired?.id !== band.id) return; // forgotten meanwhile
+      await withTimeout(transport.connect(band.id), 30_000);
+      if (this.state.paired?.id !== band.id) {
+        // forgotten or replaced meanwhile: close the link that just opened
+        await transport.disconnect(band.id).catch(() => undefined);
+        return;
+      }
       this.attempt = 0;
-      this.set({ phase: 'connected', lastSeen: Date.now() });
+      this.set({ phase: 'connected', lastSeen: Date.now(), lastError: null, retryAt: null });
       const collectTimer = setInterval(() => void this.collect(), COLLECT_MS);
       this.linkSubs.push(
         transport.onStatus(band.id, (status) => this.set({ status, lastSeen: Date.now() })),
@@ -386,26 +445,43 @@ class BandController {
       void this.refresh();
       void this.collect();
       this.runRules();
-    } catch {
-      this.lost();
+    } catch (e) {
+      if (this.state.paired?.id !== band.id) return;
+      await transport.disconnect(band.id).catch(() => undefined);
+      this.lost(e instanceof Error ? e.message : String(e));
     }
   }
 
-  private lost() {
+  /** The link failed or dropped: retry with backoff (2, 5, 10, 20, then every 30 s), forever. */
+  private lost(error: string | null = null) {
     if (!this.state.paired) return;
     this.clearLink();
-    this.set({ phase: 'reconnecting' });
     const delay = RETRY_SECONDS[Math.min(this.attempt, RETRY_SECONDS.length - 1)];
     this.attempt += 1;
+    const retryAt = Date.now() + delay * 1000;
+    this.set({ phase: 'reconnecting', retryAt, ...(error !== null && { lastError: error }) });
     this.retryTimer = setTimeout(() => void this.connect(), delay * 1000);
   }
 
   /** Reconnect now instead of waiting for the next retry. */
   reconnectNow() {
     if (this.state.phase === 'connected' || !this.state.paired) return;
+    this.clearLink();
     this.attempt = 0;
-    this.set({ phase: 'connecting' });
+    this.set({ phase: 'connecting', retryAt: null });
     void this.connect();
+  }
+
+  /** Back in the foreground: make sure the link is really up, or reconnect now. */
+  private async checkLink() {
+    const band = this.state.paired;
+    if (!band || this.connecting) return;
+    if (this.state.phase !== 'connected') return this.reconnectNow();
+    const up = await this.transport.isConnected(band.id).catch(() => false);
+    if (!up && this.state.paired?.id === band.id && this.state.phase === 'connected') {
+      this.attempt = 0;
+      this.lost('The link closed while the app was in the background');
+    }
   }
 
   /**
@@ -520,7 +596,7 @@ class BandController {
   private async findPairedNearby(): Promise<boolean> {
     const paired = this.state.paired;
     if (!paired) return false;
-    if (paired.id === SIM_BAND.id) return true;
+    if (this.isDemoBand()) return true;
     if (await this.real.isConnected(paired.id).catch(() => false)) return true;
     return new Promise((resolve) => {
       let seen = false;
@@ -541,6 +617,7 @@ class BandController {
     const paired = this.state.paired;
     if (!paired) return false;
     if (this.state.phase === 'connected') return true;
+    this.clearLink();
     await this.connect();
     // connect() updates the state, so read it again rather than the narrowed value
     return this.getState().phase === 'connected';

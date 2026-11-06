@@ -34,7 +34,8 @@ export interface BandTransport {
   testBuzz(id: string): Promise<void>;
   setTime(id: string, unixSeconds: number): Promise<void>;
   /** Tells the band which status pattern to play (buzz, light). */
-  setStatus(id: string, status: BandStatus): Promise<void>;
+  /** `silenced`: red that someone acknowledged, so the band shows it without buzzing. */
+  setStatus(id: string, status: BandStatus, silenced?: boolean): Promise<void>;
   /** Stops the band's red buzzing. */
   ackRed(id: string): Promise<void>;
   disconnect(id: string): Promise<void>;

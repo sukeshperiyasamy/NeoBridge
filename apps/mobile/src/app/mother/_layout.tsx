@@ -4,7 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { t } from '@neobridge/i18n';
 
 import { getOutbox } from '@/api/outbox';
-import { getBandController } from '@/ble/band-controller';
+import { DEMO_BAND_ALLOWED, getBandController } from '@/ble/band-controller';
 import { SIM_BAND } from '@/ble/sim-band';
 import { useBand } from '@/ble/use-band';
 import AppTabs from '@/components/app-tabs';
@@ -41,7 +41,10 @@ export default function MotherLayout() {
   useEffect(() => {
     if (!baby) return;
     getBandController().setCalibration(baby.calibrationOffsetC ?? 0);
-    if (baby.bandId === SIM_BAND.id && band.phase === 'unpaired') void getBandController().useDemoBand();
+    // the demo band only exists in the browser; on a phone the real band is paired
+    if (DEMO_BAND_ALLOWED && baby.bandId === SIM_BAND.id && band.phase === 'unpaired') {
+      void getBandController().useDemoBand();
+    }
   }, [baby, band.phase]);
 
   // pairing a band on this phone records it against the baby (M7, "own, with ASHA")

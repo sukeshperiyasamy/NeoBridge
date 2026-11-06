@@ -276,3 +276,4 @@ export function toBase64(bytes: Uint8Array): string {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
 }
+export * from "./serial";

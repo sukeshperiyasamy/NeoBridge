@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'in.neobridge'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.btserial"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}

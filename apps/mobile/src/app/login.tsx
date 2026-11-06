@@ -7,7 +7,7 @@ import { demoLogins, demoPasswordLogins } from '@neobridge/demo';
 import { pick } from '@neobridge/i18n';
 import { color, radius } from '@neobridge/tokens';
 
-import { ApiError } from '@/api/client';
+import { ApiError, DEFAULT_API_URL, getApiUrl, setApiUrl } from '@/api/client';
 import { LanguageSwitch } from '@/components/language-switch';
 import { Body, Button, Card, Choice, Field, H1, Line, Muted, Screen, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
@@ -244,7 +244,63 @@ export default function LoginScreen() {
           ))}
         </Card>
       )}
+      {step === 'phone' && <TestTools />}
     </Screen>
+  );
+}
+
+/**
+ * For test builds: try the band without logging in, and point the app at a
+ * server (the laptop on the LAN today, a hosted API later) without a rebuild.
+ * English only, like the band test screen.
+ */
+function TestTools() {
+  const [current, setCurrent] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [check, setCheck] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getApiUrl().then((url) => {
+      setCurrent(url);
+      setDraft(url);
+    });
+  }, []);
+
+  async function save(url: string | null) {
+    const next = await setApiUrl(url);
+    setCurrent(next);
+    setDraft(next);
+    setCheck('Checking…');
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 6_000);
+    try {
+      const res = await fetch(`${next}/health`, { signal: abort.signal });
+      setCheck(res.ok ? 'Server reached ✓' : `Server answered ${res.status}`);
+    } catch {
+      setCheck('Can’t reach this server from the phone');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return (
+    <Card>
+      <Text style={styles.section}>Testing</Text>
+      <Muted>Pair the ESP32 band and see its live data. No login or server needed.</Muted>
+      <Button kind="secondary" label="Test the band (no login)" onPress={() => router.push('/band-test')} />
+      <Field
+        label="Server address"
+        value={draft}
+        onChangeText={setDraft}
+        placeholder="https://your-api.onrender.com"
+        hint={current === DEFAULT_API_URL ? 'Build default' : 'Set on this phone'}
+      />
+      <Button kind="secondary" label="Save and check" onPress={() => void save(draft)} />
+      {current !== DEFAULT_API_URL && (
+        <Button kind="secondary" label="Back to the build default" onPress={() => void save(null)} />
+      )}
+      {check && <Muted>{check}</Muted>}
+    </Card>
   );
 }
 

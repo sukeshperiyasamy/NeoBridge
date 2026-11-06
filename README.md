@@ -98,7 +98,7 @@ the baby so that a problem is noticed early and the right person is called.
 | Website & doctor view | Next.js |
 | API | Node · Hono |
 | Database | Postgres (Neon) |
-| Sensor firmware | ESP32 · ESP-IDF · Bluetooth LE |
+| Sensor firmware | ESP32 · ESP-IDF · Bluetooth LE, plus an Arduino sketch over Classic Bluetooth |
 
 ## Project structure
 
@@ -107,7 +107,7 @@ apps/
   mobile/     iOS & Android app
   web/        website and dashboards
   api/        backend
-firmware/     ESP32 sensor
+firmware/     ESP32 sensor (ESP-IDF, BLE); arduino/ has the Classic Bluetooth sketch
 packages/     shared code: Bluetooth protocol, status rules, domain rules
               (visit plan, weight gain), design tokens, translations
 assets/       logo, product photos and videos
@@ -163,6 +163,14 @@ Or log in with one of these numbers; the app shows the one-time code.
 
 The website keeps its own sample logins (`mother.demo` / `Mother@123`,
 `asha.demo` / `Asha@123`, `doctor.demo` / `Doctor@123`).
+
+## Testing with the ESP32 band
+
+The hardware team's Arduino sketch (`firmware/arduino/neovital_band`) talks
+Classic Bluetooth serial. The Android app pairs with it too. Use
+Settings → **Band test (ESP32)** to pair, watch live temperature, drive the
+alarm and check the SD card sync. The steps are in
+[firmware/arduino/README.md](firmware/arduino/README.md).
 
 ## Status
 

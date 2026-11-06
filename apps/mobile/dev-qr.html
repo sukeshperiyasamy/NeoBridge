@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeoBridge dev QR</title>
+<style>
+  :root { --bg: #f6f4ef; --card: #fff; --text: #1d1b16; --muted: #6b665c; --accent: #1f6f5c; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p { margin: 4px 0; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
+  .card { background: var(--card); border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 17px; margin: 0 0 6px; }
+  .qr { display: flex; justify-content: center; padding: 12px; background: #fff; }
+  code { display: block; word-break: break-all; font-size: 12px; background: #f0eee8; padding: 8px; border-radius: 8px; margin-top: 8px; color: var(--text); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: #dcefe7; color: var(--accent); }
+  .warn { background: #fbe9d0; color: #8a5300; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Open NeoBridge (development build)</h1>
+  <p>Scan with the phone's camera (or Google Lens). It opens the NeoBridge dev app on the laptop's dev server.</p>
+  <div class="grid">
+    <section class="card">
+      <span class="tag">Works now</span>
+      <h2>Over the USB cable</h2>
+      <p>Phone plugged into this laptop.</p>
+      <div class="qr" id="usb"></div>
+      <code id="usb-url"></code>
+    </section>
+    <section class="card">
+      <span class="tag warn">Needs port 8081 open</span>
+      <h2>Over Wi-Fi</h2>
+      <p>Phone on the same Wi-Fi as the laptop (172.31.116.122). Windows Firewall must allow port 8081.</p>
+      <div class="qr" id="wifi"></div>
+      <code id="wifi-url"></code>
+    </section>
+  </div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  const link = (server) => 'exp+neobridge://expo-development-client/?url=' + encodeURIComponent(server);
+  for (const [id, server] of [['usb', 'http://localhost:8081'], ['wifi', 'http://172.31.116.122:8081']]) {
+    const url = link(server);
+    document.getElementById(id + '-url').textContent = url;
+    new QRCode(document.getElementById(id), { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  }
+</script>
+</body>
+</html>
