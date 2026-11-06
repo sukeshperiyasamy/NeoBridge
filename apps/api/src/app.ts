@@ -36,6 +36,7 @@ import {
   type Row,
 } from "./data.ts";
 import type { Db } from "./db.ts";
+import { rateLimit, type RateLimits } from "./rate-limit.ts";
 
 /**
  * NeoBridge API. Phone-OTP login gives a bearer token; every route below
@@ -52,7 +53,14 @@ export interface AppOptions {
   /** Called for every message the server would send by SMS. */
   onSms?: (phone: string, body: string) => void;
   now?: () => number;
+  /** Per-minute request limits (rate-limit.ts). Off when not given (tests, local runs). */
+  rateLimits?: RateLimits;
+  /** Band readings older than this are deleted (storage stays inside Neon's free plan). 0 = keep all. */
+  keepReadingsDays?: number;
 }
+
+/** How often an instance runs the clean-up of old band readings. */
+const PRUNE_EVERY_MS = 60 * 60_000;
 
 type Env = { Variables: { user: AuthUser } };
 
@@ -110,11 +118,23 @@ export function createApp(db: Db, opts: AppOptions = {}) {
 
   const app = new Hono<Env>();
   app.use("*", cors());
+  if (opts.rateLimits) app.use("*", rateLimit(opts.rateLimits, now));
 
+  // Doesn't touch the database unless asked (?db=1): an uptime check every few
+  // minutes would otherwise keep Neon awake all day.
   app.get("/health", async (c) => {
+    if (c.req.query("db") !== "1") return c.json({ ok: true });
     await db.query("select 1");
     return c.json({ ok: true, db: db.label });
   });
+
+  let lastPrune = 0;
+  const pruneOldReadings = async () => {
+    const days = opts.keepReadingsDays ?? 0;
+    if (days <= 0 || now() - lastPrune < PRUNE_EVERY_MS) return;
+    lastPrune = now();
+    await db.query("delete from band_summaries where recorded_at < now() - make_interval(days => $1)", [days]);
+  };
 
   // ---- auth (C3, C4, C5) ---------------------------------------------------------
 
@@ -870,6 +890,7 @@ export function createApp(db: Db, opts: AppOptions = {}) {
       params,
     );
     await db.query("update babies set last_sync_at = now() where band_id = $1", [bandId.data]);
+    await pruneOldReadings().catch(() => undefined);
     return c.json({ accepted: body.data.length, inserted: inserted.length });
   });
 

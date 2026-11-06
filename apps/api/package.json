@@ -8,7 +8,7 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
     "db:push": "tsx src/push-schema.ts",
-    "test": "tsx --test src/app.test.ts",
+    "test": "tsx --test src/app.test.ts src/rate-limit.test.ts",
     "seed:reset": "tsx src/reset.ts"
   },
   "dependencies": {

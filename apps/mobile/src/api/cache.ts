@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { ApiError, api } from './client';
@@ -87,10 +88,20 @@ export function useApi<T>(path: string | null, opts: { pollMs?: number } = {}): 
       if (path.startsWith(prefix)) void load();
     };
     listeners.add(l);
-    const timer = opts.pollMs ? setInterval(() => void load(), opts.pollMs) : null;
+    // Polls only while the app is on screen: a phone in a pocket shouldn't keep
+    // the server (and its database) busy. Coming back, it loads at once.
+    const timer = opts.pollMs
+      ? setInterval(() => {
+          if (AppState.currentState === 'active') void load();
+        }, opts.pollMs)
+      : null;
+    const appState = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && opts.pollMs) void load();
+    });
     return () => {
       listeners.delete(l);
       if (timer) clearInterval(timer);
+      appState.remove();
     };
   }, [path, opts.pollMs, load]);
 

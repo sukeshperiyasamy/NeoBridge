@@ -9,6 +9,13 @@ import { createReadingStore } from './store';
 const BATCH = 200;
 const RETRY_SECONDS = [5, 30, 120, 300];
 const KEEP_UPLOADED_DAYS = 7;
+/**
+ * Band readings go up in batches, not one a minute: every upload wakes the
+ * database, and a phone uploading every minute would keep it awake all day
+ * (Neon's free plan counts the hours it is awake). Alerts and status changes
+ * don't wait for this; they go through the outbox at once.
+ */
+const UPLOAD_EVERY_MS = 15 * 60_000;
 
 export interface SyncState {
   online: boolean;
@@ -37,7 +44,9 @@ class SyncEngine {
   constructor() {
     void Network.getNetworkStateAsync().then((s) => this.setOnline(s));
     Network.addNetworkStateListener((s) => this.setOnline(s));
-    setInterval(() => void this.upload(), 60_000);
+    setInterval(() => {
+      if (this.uploadDue()) void this.upload();
+    }, 60_000);
     void this.refreshPending();
   }
 
@@ -63,6 +72,11 @@ class SyncEngine {
     }
   }
 
+  private uploadDue() {
+    const last = this.state.lastUploadAt;
+    return last === null || Date.now() - last >= UPLOAD_EVERY_MS;
+  }
+
   private async refreshPending() {
     this.set({ pending: await this.store.pendingCount() });
   }
@@ -71,7 +85,7 @@ class SyncEngine {
   async save(bandId: string, records: SummaryRecord[]): Promise<number> {
     const added = await this.store.add(bandId, records);
     await this.refreshPending();
-    if (added) void this.upload();
+    if (added && this.uploadDue()) void this.upload();
     return added;
   }
 
@@ -129,6 +143,11 @@ class SyncEngine {
         body: JSON.stringify(records),
         signal: abort.signal,
       });
+      if (res.status === 429) {
+        // the server's per-minute limit: wait as long as it says
+        const wait = Number(res.headers.get('retry-after') ?? 60);
+        throw new Error(`rate limited, retry in ${wait} s`);
+      }
       if (!res.ok) throw new Error(`upload failed: ${res.status}`);
     } finally {
       clearTimeout(timeout);

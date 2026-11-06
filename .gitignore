@@ -24,3 +24,9 @@ apps/api/.data/
 
 # Gradle output of local Expo modules
 apps/mobile/modules/*/android/build/
+
+# Vercel build output
+.vercel/
+
+.vercel
+.env*
