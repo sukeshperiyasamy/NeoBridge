@@ -22,6 +22,7 @@ const app = createApp(db, {
   // limits are off locally unless RATE_LIMIT=1 (the dev app polls a lot)
   rateLimits: process.env.RATE_LIMIT === "1" ? defaultLimits : undefined,
   keepReadingsDays: Number(process.env.KEEP_READINGS_DAYS ?? 30),
+  demoHistory: process.env.DEMO_HISTORY !== "0",
 });
 
 serve({ fetch: app.fetch, port, hostname: process.env.HOST ?? "0.0.0.0" }, () => {

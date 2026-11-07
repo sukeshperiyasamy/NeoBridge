@@ -9,12 +9,12 @@ import { invalidate, useApi } from '@/api/cache';
 import { ApiError, api } from '@/api/client';
 import { adviceText } from '@/components/advice-text';
 import { AssignBand } from '@/components/assign-band';
-import { KmcBars, TempChart, WeightChart } from '@/components/charts';
+import { KmcBars, WeightChart } from '@/components/charts';
+import { TempTrendCard } from '@/components/temp-trend';
 import { villageName } from '@/components/staff';
-import { Body, Button, Card, Choice, Field, H1, H2, Muted, QueryView, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
+import { Body, Button, Card, Field, H1, H2, Muted, QueryView, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
 import { dial } from '@/dial';
 import { useSession } from '@/session';
-import { useNow } from '@/use-now';
 
 /**
  * A8 (ASHA) and D5 (doctor) baby detail: header, status and the open alert,
@@ -35,11 +35,7 @@ export default function BabyDetailScreen() {
 
 function Detail({ d, doctor }: { d: BabyDetail; doctor: boolean }) {
   const { t, lang } = useT();
-  const [range, setRange] = useState<'24' | '168'>('24');
   const [assigning, setAssigning] = useState(false);
-  const temps = useApi<{ points: { t: number; skinC: number }[] }>(`/v1/babies/${d.baby.id}/temps?hours=${range}`);
-  const now = useNow(60_000);
-  const from = now - Number(range) * 3_600_000;
   const open = d.episodes.find((e) => e.kind === 'red' && !e.closedAt) ?? null;
   const reds = d.episodes.filter((e) => e.kind === 'red');
   const since = d.baby.statusSince ? ago(lang, Date.parse(d.baby.statusSince)) : '';
@@ -101,24 +97,7 @@ function Detail({ d, doctor }: { d: BabyDetail; doctor: boolean }) {
       {assigning && <AssignBand babyId={d.baby.id} onDone={() => setAssigning(false)} onLater={() => setAssigning(false)} />}
       {open && <OpenRed e={open} />}
 
-      <Card>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <H2>{t('detail.skin')}</H2>
-          <Choice
-            options={[
-              { value: '24', label: t('detail.24h') },
-              { value: '168', label: t('detail.7d') },
-            ]}
-            value={range}
-            onChange={setRange}
-          />
-        </Row>
-        {temps.data && temps.data.points.length > 0 ? (
-          <TempChart points={temps.data.points} episodes={d.episodes} from={from} to={now} />
-        ) : (
-          <Muted>{temps.loading ? t('common.loading') : t('detail.noReadings')}</Muted>
-        )}
-      </Card>
+      <TempTrendCard babyId={d.baby.id} episodes={d.episodes} title={t('detail.skin')} />
 
       <Card>
         <H2>{t('detail.kmc')}</H2>

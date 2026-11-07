@@ -266,8 +266,8 @@ async function kmcFor(db: Db, babyIds: string[], sinceMs: number) {
 }
 
 /** Weights: birth weight, SNCU discharge weight, then every visit weight. */
-function weightsOf(baby: BabyInfo, visits: VisitDto[]) {
-  const points: { at: string; grams: number }[] = [{ at: baby.bornAt.slice(0, 10), grams: baby.birthWeightG }];
+function weightsOf(baby: BabyInfo, visits: VisitDto[], logs: { at: string; grams: number }[] = []) {
+  const points: { at: string; grams: number }[] = [{ at: baby.bornAt.slice(0, 10), grams: baby.birthWeightG }, ...logs];
   if (baby.dischargeDate && baby.dischargeWeightG) points.push({ at: baby.dischargeDate, grams: baby.dischargeWeightG });
   for (const v of visits) if (v.doneAt && v.weightG) points.push({ at: v.doneAt.slice(0, 10), grams: v.weightG });
   points.sort((a, b) => a.at.localeCompare(b.at));
@@ -429,7 +429,14 @@ export async function babyDetail(db: Db, id: string, viewer: AuthUser, now = Dat
     kmcSessions: kmc,
     kmcByDay,
     statusChanges,
-    weights: weightsOf(baby, visits),
+    weights: weightsOf(
+      baby,
+      visits,
+      (await db.query<Row>("select at, grams from weight_logs where baby_id = $1 order by at", [id])).map((r) => ({
+        at: iso(r.at)!.slice(0, 10),
+        grams: Number(r.grams),
+      })),
+    ),
   };
 }
 

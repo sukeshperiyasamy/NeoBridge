@@ -202,6 +202,16 @@ create table if not exists kmc_sessions (
   ended_at    timestamptz
 );
 
+-- Weights the family or staff record between visits (the baby tab).
+create table if not exists weight_logs (
+  id          uuid primary key default gen_random_uuid(),
+  baby_id     uuid not null references babies(id),
+  grams       integer not null,
+  at          timestamptz not null default now(),
+  by_user     uuid references users(id)
+);
+create index if not exists weight_logs_baby on weight_logs (baby_id, at);
+
 create table if not exists advice_notes (
   id              uuid primary key default gen_random_uuid(),
   baby_id         uuid not null references babies(id),

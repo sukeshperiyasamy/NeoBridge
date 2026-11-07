@@ -25,6 +25,7 @@ async function start() {
     demoLogin: process.env.DEMO_LOGIN !== "0",
     rateLimits: process.env.RATE_LIMIT === "0" ? undefined : defaultLimits,
     keepReadingsDays: Number(process.env.KEEP_READINGS_DAYS ?? 30),
+  demoHistory: process.env.DEMO_HISTORY !== "0",
   });
   return handle(app);
 }

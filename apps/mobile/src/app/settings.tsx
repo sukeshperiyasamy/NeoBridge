@@ -52,6 +52,7 @@ export default function SettingsScreen({ embedded }: { embedded?: boolean }) {
               <Body>{p.villages.map((v) => (lang === 'hi' ? v.nameHi : v.name)).join(', ')}</Body>
             </Row>
           )}
+          <Button kind="secondary" label={`✎ ${t('profile.edit')}`} onPress={() => router.push('/profile-edit')} />
         </Card>
       )}
 

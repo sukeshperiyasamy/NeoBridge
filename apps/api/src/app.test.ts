@@ -253,7 +253,7 @@ test("W7: doctor writes advice with a follow-up; mother sees family advice only;
   assert.ok(temps.json.points.length > 200, "5-minute medians over 24 h");
 });
 
-test("scope: a mother sees only her own baby; the mother can't read the doctor's chart", async () => {
+test("scope: a mother sees only her own baby", async () => {
   const reena = await login(demoNumbers.mother);
   const list = await call<{ babies: BabyListItem[] }>("GET", "/v1/babies", undefined, reena);
   assert.equal(list.json.babies.length, 1);
@@ -287,4 +287,54 @@ test("demo user ID + password login gives a normal session; wrong password and s
     body: JSON.stringify({ id: "asha.demo", password: "Asha@123" }),
   });
   assert.equal(res.status, 404);
+});
+
+test("15 days of demo readings: daily low and high, and the mother can see her baby's trend", async () => {
+  const reena = await login(demoNumbers.mother);
+  const me = await call("GET", "/v1/me", undefined, reena);
+  const id = me.json.babies[0].id as string;
+  const days = await call("GET", `/v1/babies/${id}/temp-days?days=15`, undefined, reena);
+  assert.equal(days.status, 200);
+  assert.ok(days.json.days.length >= 14, `got ${days.json.days.length} days`);
+  for (const d of days.json.days) {
+    assert.ok(d.minC <= d.avgC && d.avgC <= d.maxC);
+    assert.ok(d.minC > 33 && d.maxC < 38.5, JSON.stringify(d));
+  }
+  assert.equal(days.json.range.minC, Math.min(...days.json.days.map((d: any) => d.minC)));
+  const temps = await call("GET", `/v1/babies/${id}/temps?hours=360`, undefined, reena);
+  assert.equal(temps.status, 200);
+  assert.ok(temps.json.points.length > 300, "hourly medians over 15 days");
+
+  // Kavita's red episode 5 days ago shows as a dip below the very-cold line
+  const asha = await login(demoNumbers.asha);
+  const list = await call<{ babies: BabyListItem[] }>("GET", "/v1/babies", undefined, asha);
+  const kavita = list.json.babies.find((b) => b.mother.name === "Kavita Devi")!.baby.id;
+  const k = await call("GET", `/v1/babies/${kavita}/temp-days?days=15`, undefined, asha);
+  assert.ok(k.json.range.minC < 34.5, `lowest ${k.json.range.minC}`);
+});
+
+test("profile: a mother edits her details, number change is checked, baby details and a home weight", async () => {
+  const token = await login("9000000014");
+  assert.equal((await call("PATCH", "/v1/me", { phone: demoNumbers.asha }, token)).status, 409);
+  assert.equal((await call("PATCH", "/v1/me", {}, token)).status, 400);
+  const ok = await call("PATCH", "/v1/me", { name: "Anita Kumari Singh", age: 24, familyPhone: "8111111111", phone: "9111111111" }, token);
+  assert.equal(ok.status, 200);
+  const me = await call("GET", "/v1/me", undefined, token);
+  assert.equal(me.json.profile.phone, "9111111111");
+  assert.equal(me.json.mother.name, "Anita Kumari Singh");
+  assert.equal(me.json.mother.age, 24);
+  assert.equal(me.json.mother.familyPhone, "8111111111");
+  // the new number logs in
+  await login("9111111111");
+
+  const babyOf = me.json.babies[0].id as string;
+  const b = await call("PATCH", `/v1/babies/${babyOf}`, { name: "Aarav", birthWeightG: 3050 }, token);
+  assert.equal(b.status, 200);
+  assert.equal(b.json.baby.name, "Aarav");
+  assert.equal(b.json.baby.birthWeightG, 3050);
+  assert.equal((await call("PATCH", `/v1/babies/${babyId}`, { name: "Not mine" }, token)).status, 403);
+
+  assert.equal((await call("POST", `/v1/babies/${babyOf}/weights`, { grams: 3120 }, token)).status, 201);
+  const detail = await call<BabyDetail>("GET", `/v1/babies/${babyOf}`, undefined, token);
+  assert.equal(detail.json.weights.at(-1)!.grams, 3120);
 });

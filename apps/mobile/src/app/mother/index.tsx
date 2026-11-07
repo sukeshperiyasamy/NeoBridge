@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BandStatus, ReadingFlag } from '@neobridge/ble-protocol';
 import { KMC_TARGET_HOURS, type KmcHolder } from '@neobridge/domain';
-import { bi as biRaw, t as tRaw, type Key } from '@neobridge/i18n';
+import { t as tRaw, type Key } from '@neobridge/i18n';
 import { color, radius, size, status as statusColor } from '@neobridge/tokens';
 
 import { bandStatusOf, type BandPhase } from '@/ble/band-controller';
@@ -14,8 +14,10 @@ import { BrandHeader } from '@/components/brand-header';
 import { CallButton } from '@/components/call-button';
 import { sendRedSms, useRedSmsBody } from '@/components/red-alert';
 import { StatusPanel } from '@/components/status-panel';
+import { TempNowCard } from '@/components/temp-trend';
 import { Button, Card, Choice, Line, Muted, Row, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
+import { dial } from '@/dial';
 import { useSettings } from '@/language';
 import { getMotherBridge } from '@/mother/bridge';
 import { useDangerCheckDone, useHousehold } from '@/mother/household';
@@ -42,8 +44,9 @@ const fmt = (ms: number) => {
 
 /**
  * M1 / M2 Home. Status comes from the status rules (packages/rules) on the
- * band's live readings; families never see numbers. An open red stays red
- * until the ASHA or a doctor closes it.
+ * band's live readings. Under it, the baby's temperature on a level gauge
+ * (live from the band, or the last reading), then KMC and two quick actions.
+ * An open red stays red until the ASHA or a doctor closes it.
  */
 export default function MotherHome() {
   const { t, bi, lang } = useT();
@@ -87,6 +90,9 @@ export default function MotherHome() {
     now - band.lastSeen < 90_000;
   const askKmc = !kmc.running && goodContact && status === BandStatus.Green && now > kmc.askSnoozedUntil;
   const todayKmc = getKmc().todayHours(now);
+  // the rules' adjusted median when there is one, else the raw reading
+  const raw = band.lastReading;
+  const liveC = band.rules.skinC ?? (raw && raw.skinTempC !== null && (raw.flags & ReadingFlag.NoContact) === 0 ? raw.skinTempC : null);
 
   function listen() {
     const line = {
@@ -102,16 +108,27 @@ export default function MotherHome() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <BrandHeader />
       <ScrollView contentContainerStyle={styles.body}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.navigate('/mother/band')}
-          style={[styles.chip, unpaired && styles.chipUnpaired]}>
-          <Text style={[styles.chipText, unpaired && { color: color.surface }]}>{chip.text}</Text>
-          {chip.gloss && <Text style={[styles.chipSub, unpaired && { color: color.actionOnDark }]}>{chip.gloss}</Text>}
-        </Pressable>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.navigate('/mother/band')}
+            style={[styles.chip, unpaired && styles.chipUnpaired]}>
+            <Text style={[styles.chipText, unpaired && { color: color.surface }]}>
+              {unpaired ? '' : band.phase === 'connected' ? '● ' : '○ '}
+              {chip.text}
+            </Text>
+            {chip.gloss && <Text style={[styles.chipSub, unpaired && { color: color.actionOnDark }]}>{chip.gloss}</Text>}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('home.listen')}
+            onPress={listen}
+            style={({ pressed }) => [styles.listen, pressed && { opacity: 0.6 }]}>
+            <Text style={styles.listenText}>🔊 {t('home.listen')}</Text>
+          </Pressable>
+        </Row>
 
         <StatusPanel status={status} lang={lang} />
-        <Button kind="secondary" label={`🔊 ${t('home.listen')}`} onPress={listen} />
 
         {status === BandStatus.Yellow && (
           <Card tint={statusColor.yellow.panel}>
@@ -153,18 +170,19 @@ export default function MotherHome() {
           <Button kind="secondary" label={t('home.checkBand')} onPress={() => router.navigate('/mother/band')} />
         )}
 
-        {askKmc && (
-          <Card>
-            <Line value={bi('home.kmcAsk')} style={styles.alertTitle} />
-            <Row>
-              <Button label={t('home.kmcAskYes')} onPress={() => baby && getKmc().start(baby.id, 'mother')} style={{ flex: 1 }} />
-              <Button kind="secondary" label={t('home.kmcAskNo')} onPress={() => getKmc().snoozeAsk()} style={{ flex: 1 }} />
-            </Row>
-          </Card>
-        )}
+        <TempNowCard babyId={baby?.id ?? null} liveC={liveC} liveAt={band.lastSeen} />
 
         {/* M12: KMC session */}
         <Card>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Text style={styles.cardTitle}>KMC</Text>
+            <Muted>
+              {t('kmc.today')} · {t('kmc.target', { h: todayKmc.toFixed(1) })}
+            </Muted>
+          </Row>
+          <View style={styles.kmcTrack}>
+            <View style={[styles.kmcFill, { width: `${Math.min(100, (todayKmc / KMC_TARGET_HOURS) * 100)}%` }]} />
+          </View>
           {kmc.running ? (
             <>
               <Strong>{t('kmc.running', { time: fmt(now - kmc.running.startedAt) })}</Strong>
@@ -176,26 +194,56 @@ export default function MotherHome() {
               />
               <Button kind="dangerSolid" label={bi('kmc.stop')} onPress={() => getKmc().stop()} />
             </>
+          ) : askKmc ? (
+            <>
+              <Line value={bi('home.kmcAsk')} style={styles.ask} />
+              <Row>
+                <Button label={t('home.kmcAskYes')} onPress={() => baby && getKmc().start(baby.id, 'mother')} style={{ flex: 1 }} />
+                <Button kind="secondary" label={t('home.kmcAskNo')} onPress={() => getKmc().snoozeAsk()} style={{ flex: 1 }} />
+              </Row>
+            </>
           ) : (
             <Button label={bi('kmc.start')} onPress={() => baby && getKmc().start(baby.id, 'mother')} disabled={!baby} />
           )}
-          <View style={styles.kmcTrack}>
-            <View style={[styles.kmcFill, { width: `${Math.min(100, (todayKmc / KMC_TARGET_HOURS) * 100)}%` }]} />
-          </View>
-          <Muted>
-            {t('kmc.today')} · {t('kmc.target', { h: todayKmc.toFixed(1) })}
-          </Muted>
         </Card>
 
-        <Button
-          kind="secondary"
-          label={dangerDone ? `✓ ${t('home.dangerDone')}` : t('home.dangerCheck')}
-          onPress={() => router.push('/danger-check')}
-        />
-
-        {phones.asha && <CallButton label={biRaw(lang, 'call.asha', { name: phones.ashaName })} phone={phones.asha} />}
+        {/* quick actions */}
+        <Row gap={10} style={{ alignItems: 'stretch' }}>
+          <Tile
+            icon={dangerDone ? '✓' : '📋'}
+            label={dangerDone ? t('home.dangerShortDone') : t('home.dangerShort')}
+            sub={dangerDone ? t('home.dangerDone') : t('home.dangerCheck')}
+            done={dangerDone}
+            onPress={() => router.push('/danger-check')}
+          />
+          {phones.asha && (
+            <Tile
+              icon="📞"
+              label={t('home.callAshaShort', { name: phones.ashaName })}
+              sub={phones.asha}
+              onPress={() => void dial(phones.asha!)}
+            />
+          )}
+        </Row>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Tile({ icon, label, sub, onPress, done }: { icon: string; label: string; sub: string; onPress: () => void; done?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.tile, done && styles.tileDone, pressed && { opacity: 0.7 }]}>
+      <Text style={styles.tileIcon}>{icon}</Text>
+      <Text style={styles.tileLabel} numberOfLines={2}>
+        {label}
+      </Text>
+      <Text style={styles.tileSub} numberOfLines={2}>
+        {sub}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -203,6 +251,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.background, paddingHorizontal: size.screenGutter },
   body: { gap: 12, paddingBottom: 24 },
   chip: {
+    flexShrink: 1,
     alignSelf: 'flex-start',
     minHeight: 44,
     justifyContent: 'center',
@@ -229,6 +278,33 @@ const styles = StyleSheet.create({
   },
   step: { fontFamily: fontFamily.bodySemiBold, fontSize: 18 },
   alertTitle: { fontFamily: fontFamily.heading, fontSize: 21, lineHeight: 28 },
+  listen: {
+    flexShrink: 0,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: radius.chip,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  listenText: { fontFamily: fontFamily.bodySemiBold, fontSize: 14, color: color.action },
+  ask: { fontFamily: fontFamily.bodySemiBold, fontSize: 17, lineHeight: 24 },
+  cardTitle: { fontFamily: fontFamily.heading, fontSize: 19, lineHeight: 26, color: color.text },
+  tile: {
+    flex: 1,
+    minHeight: 104,
+    gap: 2,
+    padding: 14,
+    borderRadius: radius.panel,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  tileDone: { backgroundColor: statusColor.green.panel, borderColor: statusColor.green.panel },
+  tileIcon: { fontSize: 22, lineHeight: 28 },
+  tileLabel: { fontFamily: fontFamily.bodySemiBold, fontSize: 16, lineHeight: 21, color: color.text },
+  tileSub: { fontFamily: fontFamily.body, fontSize: 12, color: color.textMuted },
   kmcTrack: { height: 12, borderRadius: 6, backgroundColor: color.track, overflow: 'hidden' },
   kmcFill: { height: 12, borderRadius: 6, backgroundColor: statusColor.green.fill },
 });

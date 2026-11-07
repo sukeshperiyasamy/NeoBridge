@@ -14,7 +14,9 @@ import {
   anyDangerSign,
   dangerSigns,
   dashboardFor,
+  addDays,
   istDate,
+  istMidnight,
   visitSchedule,
   type DoctorDashboardDto,
 } from "@neobridge/domain";
@@ -36,6 +38,7 @@ import {
   type Row,
 } from "./data.ts";
 import type { Db } from "./db.ts";
+import { topUpDemoHistory } from "./demo-history.ts";
 import { rateLimit, type RateLimits } from "./rate-limit.ts";
 
 /**
@@ -57,6 +60,8 @@ export interface AppOptions {
   rateLimits?: RateLimits;
   /** Band readings older than this are deleted (storage stays inside Neon's free plan). 0 = keep all. */
   keepReadingsDays?: number;
+  /** Keep the seeded demo bands' simulated readings running up to now (demo-history.ts). */
+  demoHistory?: boolean;
 }
 
 /** How often an instance runs the clean-up of old band readings. */
@@ -127,6 +132,13 @@ export function createApp(db: Db, opts: AppOptions = {}) {
     await db.query("select 1");
     return c.json({ ok: true, db: db.label });
   });
+
+  let lastTopUp = 0;
+  const topUp = async () => {
+    if (!opts.demoHistory || now() - lastTopUp < 10 * 60_000) return;
+    lastTopUp = now();
+    await topUpDemoHistory(db, now()).catch((e: unknown) => console.error("demo history", e));
+  };
 
   let lastPrune = 0;
   const pruneOldReadings = async () => {
@@ -220,10 +232,52 @@ export function createApp(db: Db, opts: AppOptions = {}) {
     return c.json({ profile: me, mother, babies });
   });
 
+  /**
+   * Edit your own profile. Everyone: name, mobile number, language. A mother
+   * also: age, family phone, village, MCP card number. A new mobile number is
+   * the number you log in with from then on.
+   */
   app.patch("/v1/me", async (c) => {
-    const body = await parse(c, z.object({ language: z.enum(["en", "hi"]) }));
-    if (!body) return bad(c, "invalid");
-    await db.query("update users set language = $1 where id = $2", [body.language, c.get("user").id]);
+    const user = c.get("user");
+    const body = await parse(
+      c,
+      z
+        .object({
+          language: z.enum(["en", "hi"]),
+          name: z.string().trim().min(2).max(80),
+          phone: phoneSchema,
+          age: z.number().int().min(12).max(60),
+          familyPhone: optionalPhone,
+          villageId: z.string().min(1).max(40),
+          mcpNumber: z.string().trim().max(40).nullable(),
+        })
+        .partial(),
+    );
+    if (!body || Object.keys(body).length === 0) return bad(c, "invalid");
+    if (body.phone) {
+      const [taken] = await db.query("select 1 from users where phone = $1 and id <> $2", [body.phone, user.id]);
+      if (taken) return bad(c, "phone_taken", 409);
+    }
+    if (body.villageId && !(await villages(db)).has(body.villageId)) return bad(c, "invalid");
+    await db.query(
+      "update users set language = coalesce($2, language), name = coalesce($3, name), phone = coalesce($4, phone) where id = $1",
+      [user.id, body.language ?? null, body.name ?? null, body.phone ?? null],
+    );
+    if (user.role === "mother") {
+      const sets: string[] = [];
+      const params: unknown[] = [user.id];
+      const set = (col: string, v: unknown) => {
+        params.push(v);
+        sets.push(`${col} = $${params.length}`);
+      };
+      if (body.name !== undefined) set("name", body.name);
+      if (body.language !== undefined) set("language", body.language);
+      if (body.age !== undefined) set("age", body.age);
+      if (body.familyPhone !== undefined) set("family_phone", body.familyPhone);
+      if (body.villageId !== undefined) set("village_id", body.villageId);
+      if (body.mcpNumber !== undefined) set("mcp_number", body.mcpNumber || null);
+      if (sets.length) await db.query(`update mothers set ${sets.join(", ")} where user_id = $1`, params);
+    }
     return c.json({ ok: true });
   });
 
@@ -397,9 +451,10 @@ export function createApp(db: Db, opts: AppOptions = {}) {
   /** Skin temperature medians for the D5 chart: ?hours=24|168 */
   app.get("/v1/babies/:id/temps", async (c) => {
     const id = c.req.param("id");
-    if (c.get("user").role === "mother" || !(await canSee(db, c.get("user"), id))) return bad(c, "not_found", 404);
-    const hours = Math.min(Number(c.req.query("hours") ?? 24), 168);
-    const bucket = hours > 24 ? 30 : 5;
+    if (!(await canSee(db, c.get("user"), id))) return bad(c, "not_found", 404);
+    await topUp();
+    const hours = Math.min(Math.max(1, Number(c.req.query("hours") ?? 24) || 24), 24 * 15);
+    const bucket = hours > 168 ? 60 : hours > 24 ? 30 : 5;
     const rows = await db.query<Row>(
       `select extract(epoch from date_bin($3::interval, s.recorded_at, timestamptz '2000-01-01'))::bigint as t,
               (percentile_cont(0.5) within group (order by s.skin_temp_c) + max(bd.calibration_offset_c))::float as skin
@@ -412,6 +467,96 @@ export function createApp(db: Db, opts: AppOptions = {}) {
       bucketMinutes: bucket,
       points: rows.map((r) => ({ t: Number(r.t) * 1000, skinC: Math.round(Number(r.skin) * 100) / 100 })),
     });
+  });
+
+  /**
+   * Lowest and highest skin temperature for each day (IST), plus the range over
+   * the whole period: ?days=1..15. Readings without good skin contact, and
+   * values no baby could have (sensor off the skin), are left out.
+   */
+  app.get("/v1/babies/:id/temp-days", async (c) => {
+    const id = c.req.param("id");
+    if (!(await canSee(db, c.get("user"), id))) return bad(c, "not_found", 404);
+    await topUp();
+    const days = Math.min(Math.max(1, Number(c.req.query("days") ?? 15) || 15), 15);
+    const from = istMidnight(addDays(istDate(now()), -(days - 1)));
+    const rows = await db.query<Row>(
+      `with r as (
+         select to_char((s.recorded_at at time zone 'UTC') + interval '330 minutes', 'YYYY-MM-DD') as day,
+                s.recorded_at as at, (s.skin_temp_c + bd.calibration_offset_c)::float as c
+           from band_summaries s join bands bd on bd.id = s.band_id
+          where bd.baby_id = $1 and s.recorded_at >= $2 and s.skin_temp_c is not null
+            and s.contact_pct >= 60 and s.skin_temp_c between 30 and 42)
+       select day, min(c) as lo, max(c) as hi, avg(c) as avg, count(*)::int as n,
+              (array_agg(at order by c asc))[1] as lo_at, (array_agg(at order by c desc))[1] as hi_at
+         from r group by day order by day`,
+      [id, new Date(from).toISOString()],
+    );
+    const r2 = (v: unknown) => Math.round(Number(v) * 100) / 100;
+    const list = rows.map((r) => ({
+      date: String(r.day),
+      minC: r2(r.lo),
+      maxC: r2(r.hi),
+      avgC: r2(r.avg),
+      readings: Number(r.n),
+      minAt: r.lo_at == null ? null : new Date(r.lo_at as string).toISOString(),
+      maxAt: r.hi_at == null ? null : new Date(r.hi_at as string).toISOString(),
+    }));
+    const [last] = await db.query<Row>(
+      `select s.recorded_at, (s.skin_temp_c + bd.calibration_offset_c)::float as c
+         from band_summaries s join bands bd on bd.id = s.band_id
+        where bd.baby_id = $1 and s.skin_temp_c is not null and s.contact_pct >= 60
+        order by s.recorded_at desc limit 1`,
+      [id],
+    );
+    return c.json({
+      last: last ? { at: new Date(last.recorded_at as string).toISOString(), skinC: r2(last.c) } : null,
+      days: list,
+      range: list.length
+        ? { minC: Math.min(...list.map((d) => d.minC)), maxC: Math.max(...list.map((d) => d.maxC)) }
+        : null,
+    });
+  });
+
+  /** Edit the baby's details: the mother for her own baby, or the ASHA. */
+  app.patch("/v1/babies/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!role(c, "mother", "asha") || !(await canSee(db, c.get("user"), id))) return bad(c, "forbidden", 403);
+    const body = await parse(
+      c,
+      z
+        .object({
+          name: z.string().trim().min(2).max(80),
+          sex: z.enum(["female", "male"]),
+          birthWeightG: z.number().int().min(500).max(6000),
+          gestationWeeks: z.number().int().min(24).max(44),
+        })
+        .partial(),
+    );
+    if (!body || Object.keys(body).length === 0) return bad(c, "invalid");
+    await db.query(
+      `update babies set name = coalesce($2, name), sex = coalesce($3, sex),
+              birth_weight_g = coalesce($4, birth_weight_g), gestation_weeks = coalesce($5, gestation_weeks)
+        where id = $1`,
+      [id, body.name ?? null, body.sex ?? null, body.birthWeightG ?? null, body.gestationWeeks ?? null],
+    );
+    return c.json({ baby: (await babyDetail(db, id, c.get("user"), now()))!.baby });
+  });
+
+  /** A weight taken at home or at a clinic, between scheduled visits. */
+  app.post("/v1/babies/:id/weights", async (c) => {
+    const id = c.req.param("id");
+    if (!(await canSee(db, c.get("user"), id))) return bad(c, "forbidden", 403);
+    const body = await parse(c, z.object({ grams: z.number().int().min(500).max(8000), at: z.string().datetime().optional() }));
+    if (!body) return bad(c, "invalid");
+    const at = body.at ? Math.min(Date.parse(body.at), now()) : now();
+    await db.query("insert into weight_logs (baby_id, grams, at, by_user) values ($1, $2, $3, $4)", [
+      id,
+      body.grams,
+      new Date(at).toISOString(),
+      c.get("user").id,
+    ]);
+    return c.json({ ok: true }, 201);
   });
 
   /** The mother's phone reports what the status rules say. */
@@ -949,7 +1094,8 @@ export async function loadUser(db: Db, id: string): Promise<AuthUser | null> {
 
 async function assignBand(db: Db, babyId: string, bandId: string, serial?: string) {
   await db.query("update babies set band_id = null where band_id = $1 and id <> $2", [bandId, babyId]);
-  await db.query("update bands set baby_id = null where baby_id = $1 and id <> $2", [babyId, bandId]);
+  // Older bands stay linked to the baby, so its temperature history survives a
+  // band swap; babies.band_id says which band is the current one.
   await db.query(
     `insert into bands (id, serial, baby_id, paired_at) values ($1, $2, $3, now())
      on conflict (id) do update set baby_id = $3, serial = coalesce($2, bands.serial), paired_at = now()`,

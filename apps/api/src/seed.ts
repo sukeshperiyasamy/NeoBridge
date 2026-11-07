@@ -4,6 +4,7 @@
 import { addDays, istDate, visitSchedule } from "@neobridge/domain";
 
 import type { Db } from "./db.ts";
+import { topUpDemoHistory } from "./demo-history.ts";
 
 /** Login numbers for the demo, shown on the login screen. */
 export const demoNumbers = {
@@ -76,8 +77,8 @@ export async function seed(db: Db, now = Date.now()) {
   const households: Household[] = [
     {
       phone: demoNumbers.mother, mother: "Reena Kumari", age: 24, village: "saraiya", place: "facility", facility: "sncu-dh",
-      baby: "Reena's baby", sex: "female", dayOfLife: 9, birthWeightG: 2100, gestationWeeks: 35,
-      status: "grey", statusReason: "noReading", band: "demo-band", weights: [2060, 2140], kmcHoursPerDay: 6.5, baseSkin: 36.4,
+      baby: "Reena's baby", sex: "female", dayOfLife: 16, birthWeightG: 2100, gestationWeeks: 35,
+      status: "grey", statusReason: "noReading", band: "demo-band", weights: [2060, 2140, 2290], kmcHoursPerDay: 6.5, baseSkin: 36.4,
     },
     {
       phone: "9000000012", mother: "Pooja Devi", age: 21, village: "belwa", place: "facility", facility: "sncu-dh",
@@ -152,8 +153,8 @@ export async function seed(db: Db, now = Date.now()) {
       }
     }
 
-    // KMC sessions for the last 7 days
-    for (let d = 1; d <= Math.min(7, h.dayOfLife - 1); d++) {
+    // KMC sessions for the last 15 days
+    for (let d = 1; d <= Math.min(15, h.dayOfLife - 1); d++) {
       const dayStart = Date.parse(`${addDays(today, -d)}T00:30:00Z`); // 06:00 IST
       const parts = [0.45, 0.35, 0.2];
       let t = dayStart;
@@ -164,30 +165,6 @@ export async function seed(db: Db, now = Date.now()) {
           new Date(t).toISOString(), new Date(t + len).toISOString(),
         ]);
         t += len + 3 * HOUR;
-      }
-    }
-
-    // 24 h of band minute summaries (every 5 min) for the doctor's chart
-    if (h.band) {
-      const rows: unknown[][] = [];
-      const stop = h.statusReason === "noReading" && h.dayOfLife > 10 ? 6 * HOUR : 0;
-      for (let i = 288; i > stop / 300_000; i--) {
-        const at = now - i * 300_000;
-        const drift = h.status === "yellow" && i < 10 ? -0.6 : 0;
-        const skin = h.baseSkin + Math.sin(i / 20) * 0.25 + drift;
-        rows.push([h.band, 289 - i, new Date(at).toISOString(), Math.round(skin * 100) / 100, 24.5, 92, 140, 80, h.status === "yellow" ? 1 : 0]);
-      }
-      for (let i = 0; i < rows.length; i += 100) {
-        const chunk = rows.slice(i, i + 100);
-        const params: unknown[] = [];
-        const values = chunk
-          .map((r) => `(${r.map((v) => (params.push(v), `$${params.length}`)).join(",")})`)
-          .join(",");
-        await q(
-          `insert into band_summaries (band_id, seq, recorded_at, skin_temp_c, room_temp_c, contact_pct, heart_rate, battery_pct, status)
-           values ${values}`,
-          params,
-        );
       }
     }
 
@@ -227,10 +204,13 @@ export async function seed(db: Db, now = Date.now()) {
   await q(
     `insert into advice_notes (baby_id, doctor_id, kind, template, body, created_at)
      values ($1, $2, 'family', 'kmc8h', 'Keep doing KMC, at least 8 hours a day', $3),
-            ($1, $2, 'clinical', null, 'Late preterm, 2.1 kg. Weight gain adequate. Review on day 14.', $3)`,
+            ($1, $2, 'clinical', null, 'Late preterm, 2.1 kg. Weight gain adequate. Review on day 21.', $3)`,
     [babyIds["Reena Kumari"], mehta.id, ts(2 * DAY)],
   );
   await q("insert into danger_checks (id, baby_id, by_user, at, answers, any_yes) select 'seed-dc-' || b.id, b.id, m.user_id, $1, '{\"poorFeeding\":false,\"limp\":false,\"breathing\":false,\"fits\":false,\"yellowSkin\":false}', false from babies b join mothers m on m.id = b.mother_id", [
     ts(16 * HOUR),
   ]);
+
+  // 15 days of band readings, shaped by the episodes above (demo-history.ts)
+  await topUpDemoHistory(db, now);
 }

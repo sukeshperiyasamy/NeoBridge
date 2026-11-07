@@ -58,19 +58,19 @@ const panelLook = {
 const styles = StyleSheet.create({
   panel: {
     borderRadius: radius.panel,
-    paddingVertical: 24,
+    paddingVertical: 18,
     paddingHorizontal: 20,
     alignItems: 'center',
     gap: 2,
   },
   title: {
-    fontSize: 30,
-    lineHeight: 42,
+    fontSize: 28,
+    lineHeight: 38,
     fontFamily: fontFamily.heading,
     textAlign: 'center',
   },
   action: {
-    marginTop: 10,
+    marginTop: 6,
     fontSize: 19,
     lineHeight: 26,
     fontFamily: fontFamily.bodySemiBold,

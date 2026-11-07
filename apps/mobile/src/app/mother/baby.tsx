@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useSyncExternalStore } from 'react';
 import { View } from 'react-native';
 
@@ -7,7 +8,8 @@ import { ago, type Key } from '@neobridge/i18n';
 import { adviceText } from '@/components/advice-text';
 import { BrandHeader } from '@/components/brand-header';
 import { KmcBars, StatusStrip } from '@/components/charts';
-import { Body, Card, H1, H2, Line, Loading, Muted, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
+import { TempTrendCard } from '@/components/temp-trend';
+import { Body, Button, Card, H1, H2, Line, Loading, Muted, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
 import { useHousehold } from '@/mother/household';
 import { getKmc } from '@/mother/kmc';
 import { useNow } from '@/use-now';
@@ -15,8 +17,9 @@ import { useNow } from '@/use-now';
 const arrow = { up: '↑', flat: '→', down: '↓' } as const;
 
 /**
- * Baby tab: M10 baby profile, M9 mother profile, M4 baby's day, M13 history,
- * M14 measurements (kg + arrow, no other numbers), M15 alerts, M18 advice.
+ * Baby tab: the temperature trend (15 days, each day's low and high), M10
+ * baby profile, M9 mother profile, M4 baby's day, M13 history, M14
+ * measurements, M15 alerts, M18 advice. Both profiles can be edited.
  */
 export default function BabyTab() {
   const { t, bi, lang } = useT();
@@ -43,6 +46,8 @@ export default function BabyTab() {
     <Screen header={<BrandHeader />}>
       <H1>{baby.name}</H1>
       <Muted>{t('baby.dayOfLife', { n: detail?.dayOfLife ?? '–' })}</Muted>
+
+      <TempTrendCard babyId={baby.id} episodes={detail?.episodes ?? []} />
 
       {/* M4 */}
       <Card>
@@ -79,6 +84,7 @@ export default function BabyTab() {
         ) : (
           <Muted>{t('common.empty')}</Muted>
         )}
+        <Button kind="secondary" label={`＋ ${t('profile.weight')}`} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'weight' } })} />
       </Card>
 
       {/* M18 */}
@@ -128,6 +134,7 @@ export default function BabyTab() {
           />
         )}
         {baby.facility && <Info label={t('baby.facility')} value={baby.facility.name} />}
+        <Button kind="secondary" label={`✎ ${t('profile.editBaby')}`} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'baby' } })} />
       </Card>
 
       {/* M9 */}
@@ -141,6 +148,8 @@ export default function BabyTab() {
           {mother.asha && <Info label={t('baby.asha')} value={`${mother.asha.name} · ${mother.asha.phone}`} />}
           {mother.deliveryFacility && <Info label={t('reg.deliveryFacility')} value={mother.deliveryFacility.name} />}
           {mother.familyPhone && <Info label={t('baby.emergency')} value={mother.familyPhone} />}
+          {mother.mcpNumber && <Info label={t('profile.mcp')} value={mother.mcpNumber} />}
+          <Button kind="secondary" label={`✎ ${t('profile.edit')}`} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'me' } })} />
         </Card>
       )}
     </Screen>

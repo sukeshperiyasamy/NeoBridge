@@ -220,3 +220,180 @@ const styles = StyleSheet.create({
   stripAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   axis: { fontFamily: fontFamily.body, fontSize: 11, color: color.textMuted },
 });
+
+// ---- temperature level and trend ---------------------------------------------------
+
+/** The scale the gauge shows: below and above anything a newborn's skin reads. */
+export const GAUGE_MIN_C = 32;
+export const GAUGE_MAX_C = 40;
+
+export type TempZone = 'veryCold' | 'cold' | 'normal' | 'hot';
+
+export function zoneOf(c: number): TempZone {
+  if (c < defaultConfig.veryColdC) return 'veryCold';
+  if (c < defaultConfig.coldC) return 'cold';
+  if (c > defaultConfig.hotC) return 'hot';
+  return 'normal';
+}
+
+export const zoneColor: Record<TempZone, string> = {
+  veryCold: statusColor.red.fill,
+  cold: statusColor.yellow.fill,
+  normal: statusColor.green.fill,
+  hot: statusColor.red.fill,
+};
+
+const gaugePct = (c: number) =>
+  ((Math.min(GAUGE_MAX_C, Math.max(GAUGE_MIN_C, c)) - GAUGE_MIN_C) / (GAUGE_MAX_C - GAUGE_MIN_C)) * 100;
+
+/**
+ * A level indicator: the scale from 32 to 40 °C in its four zones (very cold,
+ * cold, normal, too warm, from the status rules), a marker at the current
+ * reading, and ticks at today's low and high.
+ */
+export function TempGauge({
+  value,
+  low,
+  high,
+  labels,
+}: {
+  value: number | null;
+  low?: number | null;
+  high?: number | null;
+  labels: Record<TempZone, string> & { now: string };
+}) {
+  const cuts = [GAUGE_MIN_C, defaultConfig.veryColdC, defaultConfig.coldC, defaultConfig.hotC, GAUGE_MAX_C];
+  const zones: TempZone[] = ['veryCold', 'cold', 'normal', 'hot'];
+  return (
+    <View style={{ paddingTop: 30 }}>
+      {value !== null && (
+        <View style={[g.markerWrap, { left: `${gaugePct(value)}%` }]} pointerEvents="none">
+          <Text style={[g.markerText, { backgroundColor: zoneColor[zoneOf(value)] }]}>{labels.now}</Text>
+          <View style={[g.markerArrow, { borderTopColor: zoneColor[zoneOf(value)] }]} />
+        </View>
+      )}
+      <View style={g.bar}>
+        {zones.map((z, i) => (
+          <View key={z} style={{ width: `${gaugePct(cuts[i + 1]) - gaugePct(cuts[i])}%`, backgroundColor: zoneColor[z], opacity: 0.85 }} />
+        ))}
+      </View>
+      {[low, high].map((c, i) =>
+        c == null ? null : <View key={i} style={[g.tick, { left: `${gaugePct(c)}%` }]} />,
+      )}
+      <View style={g.cutRow}>
+        {cuts.map((c, i) => (
+          <Text
+            key={c}
+            style={[
+              g.cut,
+              { left: `${gaugePct(c)}%` },
+              i === 0 ? { marginLeft: 0, textAlign: 'left' } : i === cuts.length - 1 ? { marginLeft: -30, textAlign: 'right' } : null,
+            ]}>
+            {c.toFixed(c % 1 ? 1 : 0)}°
+          </Text>
+        ))}
+      </View>
+      <View style={g.zoneRow}>
+        {zones.map((z, i) => (
+          <Text
+            key={z}
+            numberOfLines={2}
+            style={[g.zone, { width: `${gaugePct(cuts[i + 1]) - gaugePct(cuts[i])}%`, color: z === 'normal' ? statusColor.green.heading : color.textMuted }]}>
+            {labels[z]}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export interface TempDay {
+  date: string;
+  minC: number;
+  maxC: number;
+  avgC: number;
+}
+
+/** Each day's low-to-high band with its average, against the status lines. */
+export function TempRangeChart({ days, height = 190 }: { days: TempDay[]; height?: number }) {
+  const [w, onLayout] = useWidth();
+  if (days.length === 0) return null;
+  const lo = Math.min(34, ...days.map((d) => d.minC)) - 0.2;
+  const hi = Math.max(38, ...days.map((d) => d.maxC)) + 0.2;
+  const left = 32;
+  const bottom = 18;
+  const bw = (w - left - 4) / days.length;
+  const y = (c: number) => 6 + ((hi - c) / (hi - lo)) * (height - bottom - 10);
+  const every = days.length > 10 ? 2 : 1;
+  const lines = [
+    { c: defaultConfig.hotC, stroke: statusColor.red.fill },
+    { c: defaultConfig.coldC, stroke: statusColor.yellow.strong },
+    { c: defaultConfig.veryColdC, stroke: statusColor.red.fill },
+  ];
+  return (
+    <View onLayout={onLayout}>
+      <Svg width={w} height={height}>
+        <Rect x={left} y={y(defaultConfig.hotC)} width={w - left} height={y(defaultConfig.coldC) - y(defaultConfig.hotC)} fill={statusColor.green.panel} />
+        {lines.map((l) => (
+          <G key={l.c}>
+            <SvgLine x1={left} x2={w} y1={y(l.c)} y2={y(l.c)} stroke={l.stroke} strokeDasharray="5 4" strokeWidth={1} />
+            <SvgText x={0} y={y(l.c) + 3} fontSize={9} fill={l.stroke}>
+              {l.c.toFixed(1)}
+            </SvgText>
+          </G>
+        ))}
+        {days.map((d, i) => {
+          const cx = left + i * bw + bw / 2;
+          const worst = d.minC < defaultConfig.coldC ? zoneOf(d.minC) : zoneOf(d.maxC);
+          const barW = Math.max(4, Math.min(14, bw * 0.5));
+          return (
+            <G key={d.date}>
+              <Rect
+                x={cx - barW / 2}
+                y={y(d.maxC)}
+                width={barW}
+                height={Math.max(3, y(d.minC) - y(d.maxC))}
+                rx={barW / 2}
+                fill={zoneColor[worst]}
+              />
+              <Circle cx={cx} cy={y(d.avgC)} r={Math.max(2, barW / 3)} fill={color.surface} stroke={color.text} strokeWidth={1} />
+              {(i % every === 0 || i === days.length - 1) && (
+                <SvgText x={cx} y={height - 4} fontSize={9} fill={color.textMuted} textAnchor="middle">
+                  {`${Number(d.date.slice(8))}/${Number(d.date.slice(5, 7))}`}
+                </SvgText>
+              )}
+            </G>
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}
+
+const g = StyleSheet.create({
+  bar: { flexDirection: 'row', height: 16, borderRadius: 8, overflow: 'hidden' },
+  markerWrap: { position: 'absolute', top: 0, width: 60, marginLeft: -30, alignItems: 'center' },
+  markerText: {
+    fontFamily: fontFamily.bodySemiBold,
+    fontSize: 11,
+    color: color.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  markerArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  tick: { position: 'absolute', top: 26, width: 3, height: 24, marginLeft: -1.5, borderRadius: 2, backgroundColor: color.text },
+  cutRow: { height: 16, marginTop: 4 },
+  cut: { position: 'absolute', width: 30, marginLeft: -15, textAlign: 'center', fontFamily: fontFamily.body, fontSize: 10, color: color.textMuted },
+  zoneRow: { flexDirection: 'row', marginTop: 2 },
+  zone: { fontFamily: fontFamily.body, fontSize: 10, textAlign: 'center' },
+});
