@@ -6,6 +6,7 @@ import { ago } from '@neobridge/i18n';
 
 import { useApi } from '@/api/cache';
 import { BrandHeader } from '@/components/brand-header';
+import { VisitPlanCard } from '@/components/ai';
 import { BabyRow, villageName } from '@/components/staff';
 import { Choice, Empty, Field, H1, Muted, QueryView, Screen, useT } from '@/components/ui';
 
@@ -40,6 +41,7 @@ export default function AshaBabies() {
                 {t('asha.counts', { red: count('red'), yellow: count('yellow'), grey: count('grey') })}
                 {q.at ? ` · ${t('asha.synced', { ago: ago(lang, q.at) })}` : ''}
               </Muted>
+              {filter === 'all' && !needle && <VisitPlanCard babies={babies} />}
               <Choice<Filter>
                 options={[
                   { value: 'all', label: t('asha.filter.all') },

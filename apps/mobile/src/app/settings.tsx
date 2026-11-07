@@ -53,6 +53,7 @@ export default function SettingsScreen({ embedded }: { embedded?: boolean }) {
             </Row>
           )}
           <Button kind="secondary" icon="edit" label={t('profile.edit')} onPress={() => router.push('/profile-edit')} />
+          <Button kind="secondary" icon="sparkle" label={t('ai.usage.title')} onPress={() => router.push('/ai-usage')} />
         </Card>
       )}
 

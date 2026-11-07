@@ -5,7 +5,7 @@ import { seed } from "./seed.ts";
 
 const db = await openDb();
 const tables = [
-  "outbound_sms", "weight_logs", "advice_notes", "kmc_sessions", "danger_checks", "referrals", "visits", "episodes",
+  "ai_calls", "outbound_sms", "weight_logs", "advice_notes", "kmc_sessions", "danger_checks", "referrals", "visits", "episodes",
   "status_changes", "band_summaries", "bands", "babies", "mothers", "sessions", "otp_codes",
   "asha_villages", "users", "villages", "facilities",
 ];

@@ -355,3 +355,33 @@ test("export: the baby's readings and daily low/high as CSV", async () => {
   assert.ok(d.length >= 15);
   assert.equal((await app.request(`/v1/babies/${id}/export`)).status, 401);
 });
+
+test("AI demo mode (no API key): summaries for mother and ASHA, visit plan, cache and usage", async () => {
+  {
+    const reena = await login(demoNumbers.mother);
+    const id = (await call("GET", "/v1/me", undefined, reena)).json.babies[0].id as string;
+    const m = await call("GET", `/v1/babies/${id}/ai-summary?audience=doctor`, undefined, reena);
+    assert.equal(m.status, 200, JSON.stringify(m.json));
+    assert.equal(m.json.audience, "mother"); // a mother can't ask for the clinical note
+    assert.equal(m.json.meta.source, "demo");
+    assert.ok(m.json.meta.outputTokens > 0);
+    assert.ok(m.json.summary.headline && m.json.summary.points.length >= 2 && m.json.summary.action);
+    const again = await call("GET", `/v1/babies/${id}/ai-summary`, undefined, reena);
+    assert.equal(again.json.meta.cached, true);
+    const hi = await call("GET", `/v1/babies/${id}/ai-summary?lang=hi`, undefined, reena);
+    assert.match(hi.json.summary.action, /[ऀ-ॿ]/);
+
+    const asha = await login(demoNumbers.asha);
+    const plan = await call("GET", "/v1/ai/visit-plan", undefined, asha);
+    assert.equal(plan.status, 200, JSON.stringify(plan.json));
+    assert.ok(plan.json.plan.items.length > 0 && plan.json.plan.items[0].babyId && plan.json.plan.overview);
+    assert.equal((await call("GET", "/v1/ai/visit-plan", undefined, reena)).status, 403);
+
+    const usage = await call("GET", "/v1/ai/usage", undefined, asha);
+    assert.equal(usage.json.demo, true);
+    assert.ok(usage.json.totals.modelCalls > 50, "seeded week of demo calls");
+    assert.ok(usage.json.totals.calls >= 4);
+    assert.ok(usage.json.totals.cachedCalls >= 1);
+    assert.deepEqual(usage.json.byFeature.map((f: { feature: string }) => f.feature), ["summary", "visit_plan"]);
+  }
+});

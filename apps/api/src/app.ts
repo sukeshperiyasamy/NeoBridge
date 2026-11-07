@@ -37,6 +37,7 @@ import {
   type AuthUser,
   type Row,
 } from "./data.ts";
+import { aiUsage, babySummary, visitPlan, type Audience, type Lang } from "./ai.ts";
 import type { Db } from "./db.ts";
 import { topUpDemoHistory } from "./demo-history.ts";
 import { rateLimit, type RateLimits } from "./rate-limit.ts";
@@ -575,6 +576,37 @@ export function createApp(db: Db, opts: AppOptions = {}) {
   });
 
   /** Edit the baby's details: the mother for her own baby, or the ASHA. */
+  // ------------------------------------------------------------ AI (ai.ts)
+  const langOf = (u: AuthUser): Lang => (u.language === "hi" ? "hi" : "en");
+
+  /** Plain-language note on the last days: ?audience=mother|asha|doctor (a mother always gets "mother"). */
+  app.get("/v1/babies/:id/ai-summary", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+    if (!(await canSee(db, user, id))) return bad(c, "not_found", 404);
+    await topUp();
+    const detail = await babyDetail(db, id, user, now());
+    if (!detail) return bad(c, "not_found", 404);
+    const asked = c.req.query("audience");
+    const audience: Audience =
+      user.role === "mother" ? "mother" : asked === "mother" || asked === "asha" || asked === "doctor" ? asked : user.role === "asha" ? "asha" : "doctor";
+    const lang = c.req.query("lang") === "hi" ? "hi" : c.req.query("lang") === "en" ? "en" : langOf(user);
+    return c.json({ audience, lang, ...(await babySummary(db, { detail, audience, lang, userId: user.id, now: now() })) });
+  });
+
+  /** The ASHA's day: babies in the rules' triage order, with an AI-written why and to-do for each. */
+  app.get("/v1/ai/visit-plan", async (c) => {
+    const user = c.get("user");
+    if (user.role === "mother") return bad(c, "forbidden", 403);
+    await topUp();
+    const items = await babyList(db, await scopedBabyIds(db, user), now());
+    const lang = c.req.query("lang") === "hi" ? "hi" : c.req.query("lang") === "en" ? "en" : langOf(user);
+    return c.json({ lang, ...(await visitPlan(db, { items, lang, userId: user.id, now: now() })) });
+  });
+
+  /** How much AI the app used: calls, tokens, cost, per feature (for the "AI in NeoBridge" screen). */
+  app.get("/v1/ai/usage", async (c) => c.json(await aiUsage(db, now())));
+
   app.patch("/v1/babies/:id", async (c) => {
     const id = c.req.param("id");
     if (!role(c, "mother", "asha") || !(await canSee(db, c.get("user"), id))) return bad(c, "forbidden", 403);

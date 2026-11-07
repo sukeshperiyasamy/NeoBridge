@@ -230,3 +230,25 @@ create table if not exists outbound_sms (
   body        text not null,
   created_at  timestamptz not null default now()
 );
+
+-- Every AI note the app asked for (ai.ts): what, which model, tokens, time.
+-- Doubles as the cache (same cache_key within 12 h is reused) and feeds the
+-- "AI in NeoBridge" usage screen.
+create table if not exists ai_calls (
+  id             uuid primary key default gen_random_uuid(),
+  feature        text not null,            -- summary | visit_plan
+  baby_id        uuid,
+  user_id        uuid,
+  lang           text not null,
+  cache_key      text not null,
+  source         text not null,            -- demo | rules
+  model          text,
+  cached         boolean not null default false,
+  input_tokens   integer not null default 0,
+  output_tokens  integer not null default 0,
+  ms             integer not null default 0,
+  output         jsonb not null,
+  created_at     timestamptz not null default now()
+);
+create index if not exists ai_calls_key on ai_calls (cache_key, created_at);
+create index if not exists ai_calls_at on ai_calls (created_at);

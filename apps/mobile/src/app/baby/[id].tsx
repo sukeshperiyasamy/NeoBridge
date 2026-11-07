@@ -10,6 +10,7 @@ import { ApiError, api } from '@/api/client';
 import { adviceText } from '@/components/advice-text';
 import { AssignBand } from '@/components/assign-band';
 import { KmcBars, WeightChart } from '@/components/charts';
+import { AiSummaryCard } from '@/components/ai';
 import { TempTrendCard } from '@/components/temp-trend';
 import { villageName } from '@/components/staff';
 import { Body, Button, Card, Field, H1, H2, Muted, QueryView, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
@@ -96,6 +97,8 @@ function Detail({ d, doctor }: { d: BabyDetail; doctor: boolean }) {
 
       {assigning && <AssignBand babyId={d.baby.id} onDone={() => setAssigning(false)} onLater={() => setAssigning(false)} />}
       {open && <OpenRed e={open} />}
+
+      <AiSummaryCard babyId={d.baby.id} audience={doctor ? 'doctor' : 'asha'} />
 
       <TempTrendCard babyId={d.baby.id} episodes={d.episodes} title={t('detail.skin')} />
 

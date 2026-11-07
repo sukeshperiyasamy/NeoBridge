@@ -14,6 +14,7 @@ import { BrandHeader } from '@/components/brand-header';
 import { CallButton } from '@/components/call-button';
 import { sendRedSms, useRedSmsBody } from '@/components/red-alert';
 import { StatusPanel } from '@/components/status-panel';
+import { AiSummaryCard } from '@/components/ai';
 import { TempNowCard } from '@/components/temp-trend';
 import { Button, Card, Choice, Line, Muted, Row, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
@@ -181,6 +182,8 @@ export default function MotherHome() {
         )}
 
         <TempNowCard babyId={baby?.id ?? null} liveC={liveC} liveAt={band.lastSeen} />
+
+        <AiSummaryCard babyId={baby?.id} audience="mother" />
 
         {/* M12: KMC session */}
         <Card>

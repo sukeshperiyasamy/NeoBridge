@@ -4,6 +4,7 @@
 import { addDays, istDate, visitSchedule } from "@neobridge/domain";
 
 import type { Db } from "./db.ts";
+import { seedDemoAiUsage } from "./ai-demo.ts";
 import { topUpDemoHistory } from "./demo-history.ts";
 
 /** Login numbers for the demo, shown on the login screen. */
@@ -213,4 +214,7 @@ export async function seed(db: Db, now = Date.now()) {
 
   // 15 days of band readings, shaped by the episodes above (demo-history.ts)
   await topUpDemoHistory(db, now);
+
+  // A week of sample AI usage for the "AI in NeoBridge" screen (ai-demo.ts)
+  await seedDemoAiUsage(db, now);
 }
