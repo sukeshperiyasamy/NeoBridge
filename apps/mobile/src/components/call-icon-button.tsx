@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
 import { color } from '@neobridge/tokens';
 
+import { Icon } from '@/components/icon';
 import { dial } from '@/dial';
 
 /** Round outlined phone button for list rows. Tapping opens the dialer. */
@@ -13,8 +14,7 @@ export function CallIconButton({ phone, label }: { phone: string; label: string 
       accessibilityHint={phone}
       onPress={() => dial(phone)}
       style={({ pressed }) => [styles.button, pressed && { opacity: 0.7 }]}>
-      {/* TODO: swap for the Figma phone pictogram once icons are exported */}
-      <Text style={styles.glyph}>📞</Text>
+      <Icon name="call" size={24} color={color.action} />
     </Pressable>
   );
 }
@@ -30,5 +30,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glyph: { fontSize: 22 },
 });

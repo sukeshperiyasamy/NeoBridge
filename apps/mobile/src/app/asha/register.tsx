@@ -7,7 +7,8 @@ import { invalidate, useApi } from '@/api/cache';
 import { ApiError, api } from '@/api/client';
 import { AssignBand } from '@/components/assign-band';
 import { BrandHeader } from '@/components/brand-header';
-import { Body, Button, Card, Choice, Field, H1, H2, Line, Muted, Row, Screen, Strong, YesNo, useT } from '@/components/ui';
+import { Body, Button, Card, Choice, Field, H1, H2, Line, Muted, Row, Screen, Strong, Success, YesNo, useT } from '@/components/ui';
+import { fontFamily } from '@/constants/fonts';
 
 /**
  * A4 register mother → A5 register baby (makes the visit schedule) → A6 band →
@@ -314,7 +315,7 @@ function Done({ mother, baby, bandId, onAnother }: { mother: MotherInfo; baby: B
   });
   return (
     <Card>
-      <H2>✓ {t('reg.done')}</H2>
+      <Success style={{ fontFamily: fontFamily.heading, fontSize: 21, lineHeight: 28 }}>{t('reg.done')}</Success>
       <Line value={bi('reg.doneSub', { mother: mother.name, phone: mother.phone })} />
       <Strong>{baby.name}</Strong>
       {bandId && (

@@ -18,6 +18,7 @@ import { simScenarios, type SimScenario } from '@/ble/sim-band';
 import { useBand } from '@/ble/use-band';
 import { BrandHeader } from '@/components/brand-header';
 import { fontFamily } from '@/constants/fonts';
+import { Icon, type IconName } from '@/components/icon';
 import { useLanguage } from '@/language';
 import { useSync } from '@/sync/use-sync';
 
@@ -332,12 +333,12 @@ const checkLabel: Record<CheckKey, { ok: Key; fix: Key }> = {
   contact: { ok: 'fix.contact', fix: 'fix.contact.fix' },
 };
 
-const resultMark: Record<CheckResult, string> = {
-  pending: '○',
-  checking: '…',
-  pass: '✓',
-  fail: '✕',
-  skipped: '–',
+const resultIcon: Record<CheckResult, { name: IconName; color: string }> = {
+  pending: { name: 'circle', color: color.textMuted },
+  checking: { name: 'circle', color: color.action },
+  pass: { name: 'checkCircle', color: statusColor.green.fill },
+  fail: { name: 'cancel', color: statusColor.red.fill },
+  skipped: { name: 'circle', color: color.border },
 };
 
 function FixCard({ band, lang, onRun }: { band: BandState; lang: UiLanguage; onRun: () => void }) {
@@ -354,14 +355,7 @@ function FixCard({ band, lang, onRun }: { band: BandState; lang: UiLanguage; onR
           const result = checks[key];
           return (
             <View key={key} style={styles.check}>
-              <Text
-                style={[
-                  styles.mark,
-                  result === 'pass' && { color: statusColor.green.fill },
-                  result === 'fail' && { color: statusColor.red.fill },
-                ]}>
-                {resultMark[result]}
-              </Text>
+              <Icon name={resultIcon[result].name} size={22} color={resultIcon[result].color} style={styles.mark} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.body, result === 'skipped' && styles.muted]}>
                   {t(lang, checkLabel[key].ok)}
@@ -469,7 +463,7 @@ const styles = StyleSheet.create({
   signal: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
   signalBar: { width: 6, borderRadius: 2, backgroundColor: color.border },
   check: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  mark: { width: 22, fontFamily: fontFamily.bodyBold, fontSize: 18, lineHeight: 22, color: color.textMuted },
+  mark: { marginTop: 1 },
   buttons: { flexDirection: 'row', gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {

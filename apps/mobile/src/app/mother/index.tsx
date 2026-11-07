@@ -18,6 +18,7 @@ import { TempNowCard } from '@/components/temp-trend';
 import { Button, Card, Choice, Line, Muted, Row, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
 import { dial } from '@/dial';
+import { Icon, type IconName } from '@/components/icon';
 import { useSettings } from '@/language';
 import { getMotherBridge } from '@/mother/bridge';
 import { useDangerCheckDone, useHousehold } from '@/mother/household';
@@ -113,10 +114,16 @@ export default function MotherHome() {
             accessibilityRole="button"
             onPress={() => router.navigate('/mother/band')}
             style={[styles.chip, unpaired && styles.chipUnpaired]}>
-            <Text style={[styles.chipText, unpaired && { color: color.surface }]}>
-              {unpaired ? '' : band.phase === 'connected' ? '● ' : '○ '}
-              {chip.text}
-            </Text>
+            <Row gap={6}>
+              {!unpaired && (
+                <Icon
+                  name={band.phase === 'connected' ? 'dot' : 'circle'}
+                  size={14}
+                  color={band.phase === 'connected' ? statusColor.green.fill : color.textMuted}
+                />
+              )}
+              <Text style={[styles.chipText, unpaired && { color: color.surface }]}>{chip.text}</Text>
+            </Row>
             {chip.gloss && <Text style={[styles.chipSub, unpaired && { color: color.actionOnDark }]}>{chip.gloss}</Text>}
           </Pressable>
           <Pressable
@@ -124,7 +131,10 @@ export default function MotherHome() {
             accessibilityLabel={t('home.listen')}
             onPress={listen}
             style={({ pressed }) => [styles.listen, pressed && { opacity: 0.6 }]}>
-            <Text style={styles.listenText}>🔊 {t('home.listen')}</Text>
+            <Row gap={6}>
+              <Icon name="volume" size={18} color={color.action} />
+              <Text style={styles.listenText}>{t('home.listen')}</Text>
+            </Row>
           </Pressable>
         </Row>
 
@@ -210,7 +220,7 @@ export default function MotherHome() {
         {/* quick actions */}
         <Row gap={10} style={{ alignItems: 'stretch' }}>
           <Tile
-            icon={dangerDone ? '✓' : '📋'}
+            icon={dangerDone ? 'checkCircle' : 'checklist'}
             label={dangerDone ? t('home.dangerShortDone') : t('home.dangerShort')}
             sub={dangerDone ? t('home.dangerDone') : t('home.dangerCheck')}
             done={dangerDone}
@@ -218,7 +228,7 @@ export default function MotherHome() {
           />
           {phones.asha && (
             <Tile
-              icon="📞"
+              icon="call"
               label={t('home.callAshaShort', { name: phones.ashaName })}
               sub={phones.asha}
               onPress={() => void dial(phones.asha!)}
@@ -230,13 +240,15 @@ export default function MotherHome() {
   );
 }
 
-function Tile({ icon, label, sub, onPress, done }: { icon: string; label: string; sub: string; onPress: () => void; done?: boolean }) {
+function Tile({ icon, label, sub, onPress, done }: { icon: IconName; label: string; sub: string; onPress: () => void; done?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.tile, done && styles.tileDone, pressed && { opacity: 0.7 }]}>
-      <Text style={styles.tileIcon}>{icon}</Text>
+      <View style={[styles.tileIcon, done && { backgroundColor: color.surface }]}>
+        <Icon name={icon} size={22} color={done ? statusColor.green.fill : color.action} />
+      </View>
       <Text style={styles.tileLabel} numberOfLines={2}>
         {label}
       </Text>
@@ -302,7 +314,15 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   tileDone: { backgroundColor: statusColor.green.panel, borderColor: statusColor.green.panel },
-  tileIcon: { fontSize: 22, lineHeight: 28 },
+  tileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: color.background,
+    marginBottom: 4,
+  },
   tileLabel: { fontFamily: fontFamily.bodySemiBold, fontSize: 16, lineHeight: 21, color: color.text },
   tileSub: { fontFamily: fontFamily.body, fontSize: 12, color: color.textMuted },
   kmcTrack: { height: 12, borderRadius: 6, backgroundColor: color.track, overflow: 'hidden' },

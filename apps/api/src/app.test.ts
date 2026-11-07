@@ -338,3 +338,20 @@ test("profile: a mother edits her details, number change is checked, baby detail
   const detail = await call<BabyDetail>("GET", `/v1/babies/${babyOf}`, undefined, token);
   assert.equal(detail.json.weights.at(-1)!.grams, 3120);
 });
+
+test("export: the baby's readings and daily low/high as CSV", async () => {
+  const reena = await login(demoNumbers.mother);
+  const id = (await call("GET", "/v1/me", undefined, reena)).json.babies[0].id as string;
+  const res = await app.request(`/v1/babies/${id}/export?kind=readings&days=15`, { headers: { authorization: `Bearer ${reena}` } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type")!, /text\/csv/);
+  assert.match(res.headers.get("content-disposition")!, /attachment; filename="neobridge-reena-s-baby-readings-/);
+  const lines = (await res.text()).trim().split("\r\n");
+  assert.equal(lines[0], "time_ist,skin_temp_c,room_temp_c,heart_rate_bpm,skin_contact_pct,battery_pct,status,band");
+  assert.ok(lines.length > 3000, `${lines.length} rows`);
+  const daily = await app.request(`/v1/babies/${id}/export?kind=daily`, { headers: { authorization: `Bearer ${reena}` } });
+  const d = (await daily.text()).trim().split("\r\n");
+  assert.equal(d[0], "date,lowest_c,highest_c,average_c,readings");
+  assert.ok(d.length >= 15);
+  assert.equal((await app.request(`/v1/babies/${id}/export`)).status, 401);
+});

@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import { AMBULANCE } from '@neobridge/demo';
 import type { BabyDetail, Facility } from '@neobridge/domain';
-import { status as statusColor } from '@neobridge/tokens';
+import { color, status as statusColor } from '@neobridge/tokens';
 
 import { invalidate, useApi } from '@/api/cache';
 import { clientId } from '@/api/client';
@@ -11,7 +11,7 @@ import { getOutbox } from '@/api/outbox';
 import { CallButton } from '@/components/call-button';
 import { villageName } from '@/components/staff';
 import { dial } from '@/dial';
-import { Body, Button, Card, Choice, Field, H1, H2, Muted, QueryView, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
+import { Body, Button, Card, Choice, Field, H1, H2, Muted, QueryView, Row, Screen, StatusChip, Strong, Success, IconLine, useT } from '@/components/ui';
 
 /**
  * A10 (W6): pick the facility, the reason comes from the visit's findings,
@@ -65,7 +65,7 @@ function ReferForm({ d, initialReason }: { d: BabyDetail; initialReason: string 
           onChange={setFacilityId}
         />
         <Field label={t('refer.reason')} value={reason} onChangeText={setReason} multiline error={error} />
-        {!saved ? <Button label={t('refer.save')} onPress={save} /> : <Strong>✓ {t('refer.saved')}</Strong>}
+        {!saved ? <Button label={t('refer.save')} onPress={save} /> : <Success>{t('refer.saved')}</Success>}
         <CallButton label={bi('refer.call102')} phone={AMBULANCE} tone="danger" />
         {chosen?.phone && <Button kind="secondary" label={`${t('common.call')} ${chosen.name}`} onPress={() => void dial(chosen.phone!)} />}
       </Card>
@@ -105,10 +105,10 @@ function ReferForm({ d, initialReason }: { d: BabyDetail; initialReason: string 
           </Body>
         )}
         {chosen && (
-          <Body>
-            → {chosen.name}
+          <IconLine icon="arrowForward" color={color.text}>
+            {chosen.name}
             {chosen.phone ? ` · ${chosen.phone}` : ''}
-          </Body>
+          </IconLine>
         )}
       </Card>
       {saved && <Button kind="secondary" label={t('common.done')} onPress={() => router.back()} />}

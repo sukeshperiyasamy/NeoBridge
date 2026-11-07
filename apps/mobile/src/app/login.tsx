@@ -275,7 +275,7 @@ function TestTools() {
     const timer = setTimeout(() => abort.abort(), 6_000);
     try {
       const res = await fetch(`${next}/health`, { signal: abort.signal });
-      setCheck(res.ok ? 'Server reached ✓' : `Server answered ${res.status}`);
+      setCheck(res.ok ? 'Server reached' : `Server answered ${res.status}`);
     } catch {
       setCheck('Can’t reach this server from the phone');
     } finally {

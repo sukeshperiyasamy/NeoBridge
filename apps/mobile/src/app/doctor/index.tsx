@@ -8,7 +8,7 @@ import { color, radius, status as statusColor } from '@neobridge/tokens';
 import { useApi } from '@/api/cache';
 import { BrandHeader } from '@/components/brand-header';
 import { BabyRow } from '@/components/staff';
-import { Card, H1, H2, Muted, QueryView, Screen, Strong, useT } from '@/components/ui';
+import { Card, H1, H2, IconLine, Muted, QueryView, Screen, Strong, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
 
 const tileTone: Record<string, string> = {
@@ -41,7 +41,9 @@ export default function DoctorDashboard() {
               <H1>{t(`doc.dashboard.${d.kind}` as Key)}</H1>
               {d.escalations.length > 0 && (
                 <Card tint={statusColor.red.soft}>
-                  <H2 style={{ color: statusColor.red.text }}>⚑ {t('doc.escalations')}</H2>
+                  <IconLine icon="flag" size={22} color={statusColor.red.text} style={{ fontFamily: fontFamily.heading, fontSize: 21, lineHeight: 28 }}>
+                    {t('doc.escalations')}
+                  </IconLine>
                   {d.escalations.map((e) => (
                     <Pressable
                       key={e.episode.id}

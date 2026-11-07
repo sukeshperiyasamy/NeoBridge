@@ -6,7 +6,7 @@ import { status as statusColor } from '@neobridge/tokens';
 
 import { invalidate, useApi } from '@/api/cache';
 import { ApiError, api } from '@/api/client';
-import { Button, Card, Choice, Field, H1, Line, Muted, QueryView, Screen, Strong, useT } from '@/components/ui';
+import { Button, Card, Choice, Field, H1, Line, Muted, QueryView, Screen, Strong, Success, useT } from '@/components/ui';
 
 /**
  * D8 advice note. Family advice shows on the mother's phone (M18); a clinical
@@ -59,7 +59,7 @@ function Form({ d }: { d: BabyDetail }) {
   if (sent) {
     return (
       <Card>
-        <Strong>✓ {t('advice.sent')}</Strong>
+        <Success>{t('advice.sent')}</Success>
         <Button label={t('common.done')} onPress={() => router.back()} />
       </Card>
     );

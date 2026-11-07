@@ -203,7 +203,7 @@ export default function BandTestScreen() {
                 .reverse()
                 .map((l, i) => (
                   <Text key={`${l.at}-${i}`} style={[styles.logText, l.dir === 'out' && styles.logOut]} numberOfLines={2}>
-                    {l.dir === 'out' ? '→ ' : '← '}
+                    {l.dir === 'out' ? 'TX  ' : 'RX  '}
                     {l.text}
                   </Text>
                 ))

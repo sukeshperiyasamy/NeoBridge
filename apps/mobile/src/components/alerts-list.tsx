@@ -11,7 +11,7 @@ import { ApiError, api } from '@/api/client';
 import { BrandHeader } from '@/components/brand-header';
 import { villageName, type AlertEpisode } from '@/components/staff';
 import { useNow } from '@/use-now';
-import { Button, Card, Choice, Field, H1, Muted, QueryView, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
+import { Button, Card, Choice, Field, H1, Muted, QueryView, Row, Screen, StatusChip, Strong, IconLine, useT } from '@/components/ui';
 
 /** A13 (ASHA) and D6 (doctor): open and closed red alerts, who acknowledged, how fast. */
 export function AlertsList({ doctor }: { doctor?: boolean }) {
@@ -89,7 +89,9 @@ function AlertCard({ e }: { e: AlertEpisode }) {
         ) : (
           !e.closedAt && <Muted style={{ color: statusColor.red.text }}>{t('alerts.unacked', { min: openMin })}</Muted>
         )}
-        {flagged && <Strong style={{ color: statusColor.red.text }}>⚑ {t('alerts.flagged')}</Strong>}
+        {flagged && <IconLine icon="flag" color={statusColor.red.text}>
+            {t('alerts.flagged')}
+          </IconLine>}
         {e.closedBy && (
           <Muted>
             {t('baby.closedBy', { name: e.closedBy.name })}

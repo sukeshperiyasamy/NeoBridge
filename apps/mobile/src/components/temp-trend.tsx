@@ -7,9 +7,12 @@ import { ago } from '@neobridge/i18n';
 import { color, radius, status as statusColor } from '@neobridge/tokens';
 
 import { useApi } from '@/api/cache';
-import { TempChart, TempGauge, TempRangeChart, zoneColor, zoneOf, type TempDay, type TempZone } from '@/components/charts';
-import { Card, Choice, H2, Muted, Row, useT } from '@/components/ui';
+import { ApiError } from '@/api/client';
+import { exportBabyData, type ExportKind } from '@/api/export';
+import { ChartBlock, TempChart, TempGauge, TempRangeChart, zoneColor, zoneInk, zoneOf, type TempDay, type TempZone } from '@/components/charts';
+import { Button, Card, Choice, H2, IconLine, Muted, Row, Success, useT } from '@/components/ui';
 import { fontFamily } from '@/constants/fonts';
+import { Icon } from '@/components/icon';
 import { useNow } from '@/use-now';
 
 export interface TempDaysDto {
@@ -58,20 +61,23 @@ export function TempNowCard({ babyId, liveC, liveAt }: { babyId: string | null; 
       <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={s.title}>{t('home.temp.title')}</Text>
-          <Muted>
-            {value === null
-              ? t('home.temp.none')
-              : live
-                ? `● ${t('home.temp.live')}`
-                : lastAt
-                  ? t('home.temp.last', { ago: ago(lang, lastAt) })
-                  : ''}
-          </Muted>
+          <Row gap={6}>
+            {live && <Icon name="dot" size={12} color={statusColor.green.fill} />}
+            <Muted>
+              {value === null
+                ? t('home.temp.none')
+                : live
+                  ? t('home.temp.live')
+                  : lastAt
+                    ? t('home.temp.last', { ago: ago(lang, lastAt) })
+                    : ''}
+            </Muted>
+          </Row>
         </View>
         {value !== null && zone && (
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={[s.value, { color: zone === 'normal' ? statusColor.green.heading : zoneColor[zone] }]}>{fmtC(value)}</Text>
-            <Text style={[s.zoneChip, { backgroundColor: zoneColor[zone] }]}>{labels[zone]}</Text>
+            <Text style={[s.zoneChip, { backgroundColor: zoneColor[zone], color: zoneInk[zone] }]}>{labels[zone]}</Text>
           </View>
         )}
       </Row>
@@ -83,17 +89,29 @@ export function TempNowCard({ babyId, liveC, liveAt }: { babyId: string | null; 
         </Row>
       )}
       <Pressable accessibilityRole="link" onPress={() => router.navigate('/mother/baby')} style={({ pressed }) => [s.link, pressed && { opacity: 0.6 }]}>
-        <Text style={s.linkText}>{t('home.temp.trend')} →</Text>
+        <Row gap={6}>
+          <Text style={s.linkText}>{t('home.temp.trend')}</Text>
+          <Icon name="arrowForward" size={18} color={color.action} />
+        </Row>
       </Pressable>
     </Card>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
+function Stat({ label, value, tone, sub }: { label: string; value: string; tone: string; sub?: string }) {
   return (
     <View style={[s.stat, { borderLeftColor: tone }]}>
-      <Muted>{label}</Muted>
-      <Text style={s.statValue}>{value}</Text>
+      <Text style={s.statLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={s.statValue} numberOfLines={1}>
+        {value}
+      </Text>
+      {sub && (
+        <Text style={s.statLabel} numberOfLines={1}>
+          {sub}
+        </Text>
+      )}
     </View>
   );
 }
@@ -121,51 +139,83 @@ export function TempTrendCard({ babyId, episodes, title }: { babyId: string; epi
   return (
     <Card>
       <H2>{title ?? t('temp.trend.title')}</H2>
-      <Choice
-        options={[
-          { value: '24', label: t('detail.24h') },
-          { value: '168', label: t('detail.7d') },
-          { value: '360', label: t('detail.15d') },
-        ]}
-        value={range}
-        onChange={setRange}
-      />
-      {temps.data && temps.data.points.length > 0 ? (
-        <TempChart points={temps.data.points} episodes={episodes} from={now - Number(range) * 3_600_000} to={now} />
-      ) : (
-        <Muted>{temps.loading ? t('common.loading') : t('temp.trend.none')}</Muted>
-      )}
+      {n > 0 && <Muted>{t('temp.trend.period', { n })}</Muted>}
 
       {lowDay && highDay && (
-        <Row gap={8}>
-          <Stat
-            label={t('temp.trend.lowest', { n })}
-            value={`${fmtC(lowDay.minC)} · ${dayLabel(lowDay.date)}`}
-            tone={zoneColor[zoneOf(lowDay.minC)]}
-          />
-          <Stat
-            label={t('temp.trend.highest', { n })}
-            value={`${fmtC(highDay.maxC)} · ${dayLabel(highDay.date)}`}
-            tone={zoneColor[zoneOf(highDay.maxC)]}
-          />
+        <Row gap={8} style={{ alignItems: 'stretch' }}>
+          <Stat label={t('temp.trend.low')} value={fmtC(lowDay.minC)} sub={dayLabel(lowDay.date)} tone={zoneColor[zoneOf(lowDay.minC)]} />
+          <Stat label={t('temp.trend.high')} value={fmtC(highDay.maxC)} sub={dayLabel(highDay.date)} tone={zoneColor[zoneOf(highDay.maxC)]} />
+          {avg !== null && <Stat label={t('temp.trend.average')} value={fmtC(avg)} sub={t('temp.trend.allDays')} tone={zoneColor[zoneOf(avg)]} />}
         </Row>
       )}
 
+      <View style={s.divider} />
+      <ChartBlock title={t('chart.lineTitle')} hint={t('chart.lineHint')}>
+        <Choice
+          options={[
+            { value: '24', label: t('detail.24h') },
+            { value: '168', label: t('detail.7d') },
+            { value: '360', label: t('detail.15d') },
+          ]}
+          value={range}
+          onChange={setRange}
+        />
+        <View style={{ marginTop: 8 }}>
+          {temps.data && temps.data.points.length > 0 ? (
+            <TempChart points={temps.data.points} episodes={episodes} from={now - Number(range) * 3_600_000} to={now} />
+          ) : (
+            <Muted>{temps.loading ? t('common.loading') : t('temp.trend.none')}</Muted>
+          )}
+        </View>
+      </ChartBlock>
+
       {d && d.days.length > 0 && (
         <>
-          <Row style={{ justifyContent: 'space-between', marginTop: 4 }}>
-            <Text style={s.sub}>{t('temp.trend.daily')}</Text>
-            {avg !== null && (
-              <Muted>
-                {t('temp.trend.average')} {fmtC(avg)}
-              </Muted>
-            )}
-          </Row>
-          <TempRangeChart days={d.days} />
-          <Muted>{t('temp.trend.legend')}</Muted>
+          <View style={s.divider} />
+          <ChartBlock title={t('temp.trend.daily')} hint={t('chart.rangeHint')}>
+            <TempRangeChart days={d.days} />
+          </ChartBlock>
         </>
       )}
+
+      <View style={s.divider} />
+      <ExportData babyId={babyId} />
     </Card>
+  );
+}
+
+/** Download the band data as a CSV file (Excel, Google Sheets). */
+export function ExportData({ babyId }: { babyId: string }) {
+  const { t } = useT();
+  const [busy, setBusy] = useState<ExportKind | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  async function run(kind: ExportKind) {
+    setBusy(kind);
+    setResult(null);
+    try {
+      const name = await exportBabyData(babyId, kind, 15);
+      setResult({ ok: true, text: t('export.done', { name }) });
+    } catch (e) {
+      setResult({ ok: false, text: e instanceof ApiError && e.offline ? t('export.offline') : t('export.failed') });
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <ChartBlock title={t('export.title')} hint={t('export.hint')}>
+      <View style={{ gap: 8 }}>
+        <Button kind="secondary" icon="download" label={t('export.readings')} busy={busy === 'readings'} disabled={busy !== null} onPress={() => void run('readings')} />
+        <Button kind="secondary" icon="download" label={t('export.daily')} busy={busy === 'daily'} disabled={busy !== null} onPress={() => void run('daily')} />
+        {result &&
+          (result.ok ? (
+            <Success>{result.text}</Success>
+          ) : (
+            <IconLine icon="cancel" color={statusColor.red.text}>
+              {result.text}
+            </IconLine>
+          ))}
+      </View>
+    </ChartBlock>
   );
 }
 
@@ -190,8 +240,10 @@ const s = StyleSheet.create({
     borderLeftWidth: 4,
     backgroundColor: color.background,
   },
-  statValue: { fontFamily: fontFamily.bodySemiBold, fontSize: 16, color: color.text },
+  statValue: { fontFamily: fontFamily.bodySemiBold, fontSize: 17, lineHeight: 24, color: color.text },
+  statLabel: { fontFamily: fontFamily.body, fontSize: 12, lineHeight: 16, color: color.textMuted },
   sub: { fontFamily: fontFamily.bodySemiBold, fontSize: 14, color: color.text },
+  divider: { height: 1, backgroundColor: color.border, marginVertical: 4 },
   link: { alignSelf: 'flex-start', minHeight: 36, justifyContent: 'center' },
   linkText: { fontFamily: fontFamily.bodySemiBold, fontSize: 15, color: color.action },
 });

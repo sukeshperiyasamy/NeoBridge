@@ -50,7 +50,7 @@ export default function Patients() {
           return (
             <>
               {tile && (
-                <Button kind="secondary" label={`✕ ${t(`doc.tile.${tile}` as Key)}`} onPress={() => setTile(null)} />
+                <Button kind="secondary" icon="close" label={t(`doc.tile.${tile}` as Key)} onPress={() => setTile(null)} />
               )}
               <Field label={t('asha.search')} value={search} onChangeText={setSearch} />
               <Choice

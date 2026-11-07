@@ -8,13 +8,14 @@ import { ago, type Key } from '@neobridge/i18n';
 import { adviceText } from '@/components/advice-text';
 import { BrandHeader } from '@/components/brand-header';
 import { KmcBars, StatusStrip } from '@/components/charts';
+import { Icon } from '@/components/icon';
 import { TempTrendCard } from '@/components/temp-trend';
 import { Body, Button, Card, H1, H2, Line, Loading, Muted, Row, Screen, StatusChip, Strong, useT } from '@/components/ui';
 import { useHousehold } from '@/mother/household';
 import { getKmc } from '@/mother/kmc';
 import { useNow } from '@/use-now';
 
-const arrow = { up: '↑', flat: '→', down: '↓' } as const;
+const arrow = { up: 'arrowUp', flat: 'arrowForward', down: 'arrowDown' } as const;
 
 /**
  * Baby tab: the temperature trend (15 days, each day's low and high), M10
@@ -79,12 +80,12 @@ export default function BabyTab() {
                 style={{ fontSize: 18 }}
               />
             )}
-            {trend && <Strong style={{ fontSize: 26 }}>{arrow[trend]}</Strong>}
+            {trend && <Icon name={arrow[trend]} size={26} />}
           </Row>
         ) : (
           <Muted>{t('common.empty')}</Muted>
         )}
-        <Button kind="secondary" label={`＋ ${t('profile.weight')}`} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'weight' } })} />
+        <Button kind="secondary" icon="add" label={t('profile.weight')} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'weight' } })} />
       </Card>
 
       {/* M18 */}
@@ -134,7 +135,7 @@ export default function BabyTab() {
           />
         )}
         {baby.facility && <Info label={t('baby.facility')} value={baby.facility.name} />}
-        <Button kind="secondary" label={`✎ ${t('profile.editBaby')}`} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'baby' } })} />
+        <Button kind="secondary" icon="edit" label={t('profile.editBaby')} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'baby' } })} />
       </Card>
 
       {/* M9 */}
@@ -149,7 +150,7 @@ export default function BabyTab() {
           {mother.deliveryFacility && <Info label={t('reg.deliveryFacility')} value={mother.deliveryFacility.name} />}
           {mother.familyPhone && <Info label={t('baby.emergency')} value={mother.familyPhone} />}
           {mother.mcpNumber && <Info label={t('profile.mcp')} value={mother.mcpNumber} />}
-          <Button kind="secondary" label={`✎ ${t('profile.edit')}`} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'me' } })} />
+          <Button kind="secondary" icon="edit" label={t('profile.edit')} onPress={() => router.push({ pathname: '/profile-edit', params: { section: 'me' } })} />
         </Card>
       )}
     </Screen>

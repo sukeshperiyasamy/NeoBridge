@@ -7,7 +7,7 @@ import { status as statusColor } from '@neobridge/tokens';
 
 import { invalidate, useApi } from '@/api/cache';
 import { ApiError, api } from '@/api/client';
-import { Button, Card, Choice, Field, H1, H2, Muted, Screen, Strong, useT } from '@/components/ui';
+import { Button, Card, Choice, Field, H1, H2, IconLine, Muted, Screen, Success, useT } from '@/components/ui';
 import { useHousehold } from '@/mother/household';
 import { useSession } from '@/session';
 
@@ -59,7 +59,7 @@ function useSave() {
       await fn();
       await refresh();
       invalidate('/v1/');
-      setMessage({ ok: true, text: `✓ ${done}` });
+      setMessage({ ok: true, text: done });
       return true;
     } catch (e) {
       const code = e instanceof ApiError ? e.code : '';
@@ -77,7 +77,13 @@ function useSave() {
 
 function Result({ message }: { message: { ok: boolean; text: string } | null }) {
   if (!message) return null;
-  return <Strong style={{ color: message.ok ? statusColor.green.heading : statusColor.red.text }}>{message.text}</Strong>;
+  return message.ok ? (
+    <Success style={{ color: statusColor.green.heading }}>{message.text}</Success>
+  ) : (
+    <IconLine icon="cancel" color={statusColor.red.text}>
+      {message.text}
+    </IconLine>
+  );
 }
 
 const digits = (v: string) => v.replace(/\D/g, '').slice(-10);

@@ -22,6 +22,7 @@ import { color, radius, size, status as statusColor } from '@neobridge/tokens';
 
 import { StatusShape } from '@/components/status-shape';
 import { fontFamily } from '@/constants/fonts';
+import { Icon, type IconName } from '@/components/icon';
 import { useLanguage } from '@/language';
 
 /**
@@ -132,6 +133,38 @@ export function Line({ value, style, glossStyle }: { value: Bilingual; style?: S
   );
 }
 
+/** A confirmation line: green tick icon and text. */
+export function Success({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  return (
+    <View style={s.iconLine}>
+      <Icon name="checkCircle" size={20} color={statusColor.green.fill} />
+      <Text style={[s.strong, { flex: 1 }, style]}>{children}</Text>
+    </View>
+  );
+}
+
+/** Text with a leading icon. */
+export function IconLine({
+  icon,
+  children,
+  color: tone = color.text,
+  style,
+  size = 18,
+}: {
+  icon: IconName;
+  children: ReactNode;
+  color?: string;
+  style?: StyleProp<TextStyle>;
+  size?: number;
+}) {
+  return (
+    <View style={s.iconLine}>
+      <Icon name={icon} size={size} color={tone} />
+      <Text style={[s.strong, { flex: 1, color: tone }, style]}>{children}</Text>
+    </View>
+  );
+}
+
 export function Row({ children, style, gap = 10 }: { children: ReactNode; style?: StyleProp<ViewStyle>; gap?: number }) {
   return <View style={[{ flexDirection: 'row', alignItems: 'center', gap }, style]}>{children}</View>;
 }
@@ -143,6 +176,7 @@ export function Button({
   busy,
   kind = 'primary',
   style,
+  icon,
 }: {
   label: string | Bilingual;
   onPress: () => void;
@@ -150,6 +184,8 @@ export function Button({
   busy?: boolean;
   kind?: 'primary' | 'secondary' | 'danger' | 'dangerSolid';
   style?: StyleProp<ViewStyle>;
+  /** shown before the label */
+  icon?: IconName;
 }) {
   const b = typeof label === 'string' ? { text: label, gloss: null } : label;
   const solid = kind === 'primary' || kind === 'dangerSolid';
@@ -170,13 +206,22 @@ export function Button({
         <ActivityIndicator color={solid ? color.surface : color.action} />
       ) : (
         <>
-          <Text
-            style={[
-              solid ? s.primaryText : s.secondaryText,
-              kind === 'danger' && { color: statusColor.red.text },
-            ]}>
-            {b.text}
-          </Text>
+          <View style={s.buttonRow}>
+            {icon && (
+              <Icon
+                name={icon}
+                size={solid ? 22 : 18}
+                color={solid ? color.surface : kind === 'danger' ? statusColor.red.text : color.action}
+              />
+            )}
+            <Text
+              style={[
+                solid ? s.primaryText : s.secondaryText,
+                kind === 'danger' && { color: statusColor.red.text },
+              ]}>
+              {b.text}
+            </Text>
+          </View>
           {b.gloss && <Text style={solid ? s.primaryGloss : s.gloss}>{b.gloss}</Text>}
         </>
       )}
@@ -302,7 +347,7 @@ export function Check({ label, value, onChange }: { label: string; value: boolea
       accessibilityState={{ checked: value }}
       onPress={() => onChange(!value)}
       style={s.check}>
-      <View style={[s.box, value && s.boxOn]}>{value && <Text style={s.tick}>✓</Text>}</View>
+      <View style={[s.box, value && s.boxOn]}>{value && <Icon name="check" size={18} color={color.surface} />}</View>
       <Text style={[s.body, { flex: 1 }]}>{label}</Text>
     </Pressable>
   );
@@ -440,6 +485,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   boxOn: { backgroundColor: color.action },
+  buttonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  iconLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tick: { color: color.surface, fontFamily: fontFamily.bodyBold, fontSize: 18, lineHeight: 22 },
   statusChip: {
     flexDirection: 'row',

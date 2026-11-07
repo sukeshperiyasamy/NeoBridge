@@ -122,7 +122,7 @@ export function createApp(db: Db, opts: AppOptions = {}) {
   };
 
   const app = new Hono<Env>();
-  app.use("*", cors());
+  app.use("*", cors({ exposeHeaders: ["Content-Disposition", "Retry-After"] }));
   if (opts.rateLimits) app.use("*", rateLimit(opts.rateLimits, now));
 
   // Doesn't touch the database unless asked (?db=1): an uptime check every few
@@ -515,6 +515,62 @@ export function createApp(db: Db, opts: AppOptions = {}) {
       range: list.length
         ? { minC: Math.min(...list.map((d) => d.minC)), maxC: Math.max(...list.map((d) => d.maxC)) }
         : null,
+    });
+  });
+
+  /**
+   * Download the baby's band data as CSV: ?kind=readings (every saved
+   * reading) or ?kind=daily (each day's low, high and average), ?days=1..30.
+   * Times are IST. Anyone who can see the baby can export it.
+   */
+  app.get("/v1/babies/:id/export", async (c) => {
+    const id = c.req.param("id");
+    if (!(await canSee(db, c.get("user"), id))) return bad(c, "not_found", 404);
+    await topUp();
+    const kind = c.req.query("kind") === "daily" ? "daily" : "readings";
+    const days = Math.min(Math.max(1, Number(c.req.query("days") ?? 15) || 15), 30);
+    const since = new Date(istMidnight(addDays(istDate(now()), -(days - 1)))).toISOString();
+    const [baby] = await db.query<Row>("select name from babies where id = $1", [id]);
+    const ist = "to_char((s.recorded_at at time zone 'UTC') + interval '330 minutes', 'YYYY-MM-DD HH24:MI')";
+    const esc = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    let header: string[];
+    let rows: Row[];
+    if (kind === "daily") {
+      header = ["date", "lowest_c", "highest_c", "average_c", "readings"];
+      rows = await db.query<Row>(
+        `select to_char((s.recorded_at at time zone 'UTC') + interval '330 minutes', 'YYYY-MM-DD') as date,
+                round(min(s.skin_temp_c + bd.calibration_offset_c), 2) as lowest_c,
+                round(max(s.skin_temp_c + bd.calibration_offset_c), 2) as highest_c,
+                round(avg(s.skin_temp_c + bd.calibration_offset_c), 2) as average_c,
+                count(*)::int as readings
+           from band_summaries s join bands bd on bd.id = s.band_id
+          where bd.baby_id = $1 and s.recorded_at >= $2 and s.skin_temp_c is not null
+            and s.contact_pct >= 60 and s.skin_temp_c between 30 and 42
+          group by 1 order by 1`,
+        [id, since],
+      );
+    } else {
+      header = ["time_ist", "skin_temp_c", "room_temp_c", "heart_rate_bpm", "skin_contact_pct", "battery_pct", "status", "band"];
+      rows = await db.query<Row>(
+        `select ${ist} as time_ist, round(s.skin_temp_c + bd.calibration_offset_c, 2) as skin_temp_c, s.room_temp_c,
+                s.heart_rate as heart_rate_bpm, s.contact_pct as skin_contact_pct, s.battery_pct,
+                case s.status when 0 then 'green' when 1 then 'yellow' when 2 then 'red' else 'grey' end as status,
+                s.band_id as band
+           from band_summaries s join bands bd on bd.id = s.band_id
+          where bd.baby_id = $1 and s.recorded_at >= $2
+          order by s.recorded_at`,
+        [id, since],
+      );
+    }
+    const csv = [header.join(","), ...rows.map((r) => header.map((h) => esc(r[h])).join(","))].join("\r\n") + "\r\n";
+    const name = String(baby?.name ?? "baby").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "baby";
+    return c.body(csv, 200, {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="neobridge-${name}-${kind}-${istDate(now())}.csv"`,
     });
   });
 
